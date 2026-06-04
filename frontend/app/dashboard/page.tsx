@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { apiFetch } from "@/lib/api";
 
 type SessionData = {
   userId: string;
@@ -14,8 +14,8 @@ type SessionData = {
 };
 
 function RoleBadge({ role }: { role: string }) {
-  const className = `badge ${role === 'ADMIN' ? 'badge-admin' : role === 'MANAGER' ? 'badge-manager' : role === 'CREATOR' ? 'badge-creator' : 'badge-viewer'}`;
-  return <span className={className}>{role.replace('_', ' ')}</span>;
+  const className = `badge ${role === "ADMIN" ? "badge-admin" : role === "MANAGER" ? "badge-manager" : role === "CREATOR" ? "badge-creator" : "badge-viewer"}`;
+  return <span className={className}>{role.replace("_", " ")}</span>;
 }
 
 export default function DashboardPage() {
@@ -25,9 +25,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true;
-    apiFetch('/api/auth/me')
+    apiFetch("/api/auth/me")
       .then(async (res) => {
-        if (!res.ok) throw new Error('Unauthorized');
+        if (!res.ok) throw new Error("Unauthorized");
         const data = await res.json();
         if (active) {
           setSession(data.session as SessionData);
@@ -35,7 +35,7 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {
-        router.replace('/');
+        router.replace("/");
       });
     return () => {
       active = false;
@@ -43,8 +43,8 @@ export default function DashboardPage() {
   }, [router]);
 
   async function handleLogout() {
-    await apiFetch('/api/auth/logout', { method: 'POST' });
-    router.replace('/');
+    await apiFetch("/api/auth/logout", { method: "POST" });
+    router.replace("/");
   }
 
   if (loading || !session) {
@@ -63,13 +63,16 @@ export default function DashboardPage() {
         <div className="header">
           <div>
             <h1 className="page-title">Dashboard</h1>
-            <p className="description">Welcome back, {session.fullName}. Use the navigation links to manage users and view available features.</p>
+            <p className="description">
+              Welcome back, {session.fullName}. Use the navigation links to
+              manage users and view available features.
+            </p>
           </div>
           <div className="nav-links">
             <button className="nav-link" type="button" onClick={handleLogout}>
               Logout
             </button>
-            {session.role === 'ADMIN' ? (
+            {session.role === "ADMIN" ? (
               <Link className="nav-link" href="/admin/users">
                 Manage Users
               </Link>
@@ -86,14 +89,22 @@ export default function DashboardPage() {
             <strong>Role:</strong> <RoleBadge role={session.role} />
           </p>
           <p>
-            <strong>Status:</strong>{' '}
-            <span className={session.status === 'ACTIVE' ? 'status-pill status-active' : session.status === 'SUSPENDED' ? 'status-pill status-suspended' : 'status-pill status-inactive'}>
+            <strong>Status:</strong>{" "}
+            <span
+              className={
+                session.status === "ACTIVE"
+                  ? "status-pill status-active"
+                  : session.status === "SUSPENDED"
+                    ? "status-pill status-suspended"
+                    : "status-pill status-inactive"
+              }
+            >
               {session.status}
             </span>
           </p>
         </div>
 
-        <div className="card" style={{ marginTop: '1rem' }}>
+        <div className="card" style={{ marginTop: "1rem" }}>
           <h2>Core Access</h2>
           <ul>
             <li>Create textbooks (Creator / Admin only)</li>
