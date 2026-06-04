@@ -1,0 +1,103 @@
+import { Router } from 'express';
+import { hashPassword } from '../lib/auth';
+import { prisma } from '../lib/db';
+import { requireAdmin } from '../middleware/requireAdmin';
+
+const router = Router();
+
+// All user-management endpoints require an ADMIN session.
+router.use(requireAdmin);
+
+router.get('/', async (_req, res) => {
+  const usersRaw = await prisma.user.findMany({
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      role: true,
+      status: true,
+      createdAt: true,
+    },
+  });
+
+  const users = usersRaw.map((u) => ({
+    id: u.id.toString(),
+    fullName: u.fullName,
+    email: u.email,
+    role: u.role,
+    status: u.status,
+    createdAt: u.createdAt.toISOString(),
+  }));
+
+  return res.json({ users });
+});
+
+router.post('/', async (req, res) => {
+  const { fullName, email, password, role } = req.body ?? {};
+
+  if (!fullName || !email || !password || !role) {
+    return res
+      .status(400)
+      .json({ message: 'Full name, email, password and role are required.' });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    return res.status(409).json({ message: 'Email already exists.' });
+  }
+
+  const passwordHash = await hashPassword(password);
+  await prisma.user.create({
+    data: {
+      fullName,
+      email,
+      passwordHash,
+      role,
+      status: 'ACTIVE',
+    },
+  });
+
+  return res.status(201).json({ message: 'User created successfully.' });
+});
+
+router.put('/:id', async (req, res) => {
+  const userId = Number(req.params.id);
+  const { status, role } = req.body ?? {};
+
+  const updateData: Record<string, string> = {};
+
+  if (status) {
+    if (!['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value.' });
+    }
+    updateData.status = status;
+  }
+
+  if (role) {
+    if (!['ADMIN', 'CREATOR', 'MANAGER', 'VIEWER'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role value.' });
+    }
+    updateData.role = role;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return res
+      .status(400)
+      .json({ message: 'No valid update fields were provided.' });
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: updateData });
+  return res.json({ message: 'User updated successfully.' });
+});
+
+router.delete('/:id', async (req, res) => {
+  const userId = Number(req.params.id);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { status: 'INACTIVE' },
+  });
+  return res.json({ message: 'User disabled successfully.' });
+});
+
+export default router;
