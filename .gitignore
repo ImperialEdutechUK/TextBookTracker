@@ -1,0 +1,9 @@
+# backend/ and frontend/ each have their own .gitignore as well.
+# These entries also cover leftovers from the previous unified app at the repo root.
+node_modules
+.next
+out
+.env
+.env.local
+.DS_Store
+coverage
