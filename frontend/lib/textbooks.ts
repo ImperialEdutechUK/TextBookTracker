@@ -1,0 +1,136 @@
+import { apiFetch } from '@/lib/api';
+
+export type TextbookStatus =
+  | 'CREATED'
+  | 'REQUESTED_BY_LEARNER'
+  | 'SHARED_WITH_MANAGER'
+  | 'SENT_TO_PRINT'
+  | 'PRINTED';
+
+// Human-readable labels for the status enum used across the module.
+export const STATUS_LABELS: Record<TextbookStatus, string> = {
+  CREATED: 'Created',
+  REQUESTED_BY_LEARNER: 'Requested by Learner',
+  SHARED_WITH_MANAGER: 'Shared with Manager',
+  SENT_TO_PRINT: 'Sent to Print',
+  PRINTED: 'Printed',
+};
+
+export function statusLabel(status: string) {
+  return STATUS_LABELS[status as TextbookStatus] ?? status;
+}
+
+export type NamedRef = { id: string; fullName: string };
+export type TextbookRef = { id: string; name: string };
+
+export type RequestSummary = {
+  requestId: string;
+  learner: NamedRef;
+  textbook: TextbookRef;
+  creator: NamedRef;
+  currentStatus: TextbookStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StatusHistoryEntry = {
+  status: TextbookStatus;
+  changedAt: string;
+  changedBy: string;
+};
+
+export type RequestDetail = RequestSummary & {
+  statusHistory: StatusHistoryEntry[];
+};
+
+export type Pagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type FormOptions = {
+  learners: NamedRef[];
+  textbooks: TextbookRef[];
+  statuses: TextbookStatus[];
+};
+
+export type ListParams = {
+  page?: number;
+  search?: string;
+  status?: string;
+  learnerId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export type RequestInput = {
+  learnerId: string;
+  textbookId: string;
+};
+
+// Throws with the backend message so callers can surface a useful error.
+async function readError(res: Response, fallback: string) {
+  try {
+    const data = await res.json();
+    return data?.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function fetchFormOptions(): Promise<FormOptions> {
+  const res = await apiFetch('/api/textbook-requests/options');
+  if (!res.ok) throw new Error(await readError(res, 'Unable to load form options.'));
+  return res.json();
+}
+
+export async function fetchRequests(
+  params: ListParams
+): Promise<{ requests: RequestSummary[]; pagination: Pagination }> {
+  const query = new URLSearchParams();
+  if (params.page) query.set('page', String(params.page));
+  if (params.search) query.set('search', params.search);
+  if (params.status) query.set('status', params.status);
+  if (params.learnerId) query.set('learnerId', params.learnerId);
+  if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+  if (params.dateTo) query.set('dateTo', params.dateTo);
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const res = await apiFetch(`/api/textbook-requests${suffix}`);
+  if (!res.ok) throw new Error(await readError(res, 'Unable to load textbook requests.'));
+  return res.json();
+}
+
+export async function fetchRequest(id: string): Promise<RequestDetail> {
+  const res = await apiFetch(`/api/textbook-requests/${id}`);
+  if (!res.ok) throw new Error(await readError(res, 'Unable to load textbook request.'));
+  const data = await res.json();
+  return data.request as RequestDetail;
+}
+
+export async function createRequest(input: RequestInput): Promise<string> {
+  const res = await apiFetch('/api/textbook-requests', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await readError(res, 'Could not create textbook request.'));
+  const data = await res.json();
+  return data.requestId as string;
+}
+
+export async function updateRequest(id: string, input: RequestInput): Promise<void> {
+  const res = await apiFetch(`/api/textbook-requests/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await readError(res, 'Could not update textbook request.'));
+}
+
+export async function deleteRequest(id: string): Promise<void> {
+  const res = await apiFetch(`/api/textbook-requests/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(await readError(res, 'Could not delete textbook request.'));
+}
