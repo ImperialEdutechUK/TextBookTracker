@@ -41,3 +41,19 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   req.session = session;
   next();
 }
+
+// Guard that allows any of the given roles. Use for endpoints shared across
+// several roles, e.g. requireRole('CREATOR', 'ADMIN').
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const session = getSession(req);
+    if (!session) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (!roles.includes(session.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    req.session = session;
+    next();
+  };
+}

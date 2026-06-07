@@ -16,6 +16,8 @@ TextBookTracker/
 - Admin-managed user registration and account status updates
 - Protected dashboard and admin routes
 - PostgreSQL database schema using Prisma ORM
+- Textbook request management (create, list, search/filter, detail, edit, soft delete)
+  with status history and a textbook catalog
 
 ## Getting started
 
@@ -28,8 +30,9 @@ cd backend
 cp .env.example .env          # set DATABASE_URL and a strong JWT_SECRET
 npm install
 npm run prisma:generate
-npm run prisma:migrate        # creates the User table
+npm run prisma:migrate        # applies all migrations (User + textbook tables)
 npm run seed                  # creates the initial ADMIN user
+npm run seed:textbooks        # seeds a starter textbook catalog (optional)
 npm run dev                   # http://localhost:4000
 ```
 
@@ -68,10 +71,23 @@ Frontend environment variables (`frontend/.env.local`):
 - `POST /api/users`
 - `PUT  /api/users/:id`
 - `DELETE /api/users/:id`
+- `GET  /api/textbooks`
+- `GET  /api/textbook-requests/options`
+- `GET  /api/textbook-requests`
+- `POST /api/textbook-requests`
+- `GET  /api/textbook-requests/:id`
+- `PUT  /api/textbook-requests/:id`
+- `DELETE /api/textbook-requests/:id`
 
 ## Notes
 
 - Only `ADMIN` may manage users.
+- Textbook request access follows the permission matrix: `ADMIN`/`MANAGER` see all
+  requests, `CREATOR` sees requests they created, and `VIEWER` (learner) sees only
+  requests assigned to them. Only `CREATOR`/`ADMIN` may create or edit; only
+  `ADMIN` may (soft) delete. The creator is always taken from the session, never
+  the request body. Status transitions are owned by the Workflow / Status Tracking
+  module — this module only sets the initial `CREATED` state and renders history.
 - Passwords are hashed with bcrypt; sessions are signed JWTs stored in an
   httpOnly cookie set by the backend.
 - The frontend authenticates by calling the backend with `credentials: 'include'`,

@@ -8,8 +8,9 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev --name init",
-    "seed": "node scripts/seed.js"
+    "prisma:migrate": "prisma migrate dev",
+    "seed": "node scripts/seed.js",
+    "seed:textbooks": "node scripts/seed-textbooks.js"
   },
   "dependencies": {
     "@prisma/client": "^5.16.0",
