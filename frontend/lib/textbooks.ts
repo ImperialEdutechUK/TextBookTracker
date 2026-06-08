@@ -80,6 +80,62 @@ async function readError(res: Response, fallback: string) {
   }
 }
 
+// A textbook in the catalog, as returned by GET /api/textbooks.
+export type CatalogTextbook = {
+  id: string;
+  textbookName: string;
+  subject: string | null;
+  hasFile: boolean;
+  originalName: string | null;
+  fileSize: number | null;
+  createdAt: string;
+};
+
+export async function fetchTextbooks(): Promise<CatalogTextbook[]> {
+  const res = await apiFetch('/api/textbooks');
+  if (!res.ok) throw new Error(await readError(res, 'Unable to load textbooks.'));
+  const data = await res.json();
+  return data.textbooks as CatalogTextbook[];
+}
+
+// Fetches the stored PDF and returns it as a Blob. We go through the frontend's
+// own same-origin proxy route (/api/textbook-file/:id) instead of hitting the
+// backend (:4000) directly: a cross-origin binary download from the browser was
+// being reset (ERR_CONNECTION_RESET) by local security software. The proxy
+// fetches the file server-side and streams it back from the same origin.
+export async function fetchTextbookFile(id: string): Promise<Blob> {
+  const res = await fetch(`/api/textbook-file/${id}`, { credentials: 'include' });
+  if (!res.ok) throw new Error(await readError(res, 'Unable to load the PDF.'));
+  return res.blob();
+}
+
+export type NewTextbookInput = {
+  textbookName: string;
+  subject?: string;
+  pdf: File;
+};
+
+export type CreatedTextbook = {
+  id: string;
+  textbookName: string;
+  subject: string | null;
+  createdAt: string;
+};
+
+// Uploads a textbook + PDF as multipart/form-data. The browser sets the
+// Content-Type (with boundary) automatically, so we must not set it ourselves.
+export async function createTextbook(input: NewTextbookInput): Promise<CreatedTextbook> {
+  const body = new FormData();
+  body.append('textbookName', input.textbookName);
+  if (input.subject) body.append('subject', input.subject);
+  body.append('pdf', input.pdf);
+
+  const res = await apiFetch('/api/textbooks', { method: 'POST', body });
+  if (!res.ok) throw new Error(await readError(res, 'Could not add the textbook.'));
+  const data = await res.json();
+  return data.textbook as CreatedTextbook;
+}
+
 export async function fetchFormOptions(): Promise<FormOptions> {
   const res = await apiFetch('/api/textbook-requests/options');
   if (!res.ok) throw new Error(await readError(res, 'Unable to load form options.'));

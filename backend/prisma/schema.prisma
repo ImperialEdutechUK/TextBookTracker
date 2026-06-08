@@ -57,6 +57,12 @@ model Textbook {
   id           BigInt   @id @default(autoincrement()) @map("textbook_id")
   textbookName String   @map("textbook_name")
   subject      String?
+  // Uploaded PDF metadata. Files live on disk under the backend uploads
+  // directory; only the stored filename + original name/size/type are kept here.
+  fileName     String?  @map("file_name")
+  originalName String?  @map("original_name")
+  fileSize     BigInt?  @map("file_size")
+  mimeType     String?  @map("mime_type")
   createdAt    DateTime @default(now()) @map("created_at")
 
   requests TextbookRequest[]
