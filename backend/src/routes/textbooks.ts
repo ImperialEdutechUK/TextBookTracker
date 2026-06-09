@@ -1,32 +1,17 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import crypto from 'crypto';
 import { prisma } from '../lib/db';
 import { requireAuth, requireRole } from '../middleware/requireAdmin';
 
 const router = Router();
 
-// Where uploaded PDFs are stored on disk. Kept outside source control via the
-// backend .gitignore; created on boot so the first upload never fails.
-const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'textbooks');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    // Store under a random, collision-free name; the original name is kept in
-    // the DB for display/download.
-    const unique = crypto.randomBytes(16).toString('hex');
-    cb(null, `${unique}${path.extname(file.originalname).toLowerCase()}`);
-  },
-});
-
+// Buffer the upload in memory so we can persist the raw bytes to the database
+// (the `file_data` BYTEA column). No file ever touches the local disk, so the
+// app works the same across multiple instances / ephemeral filesystems.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
@@ -42,13 +27,15 @@ const upload = multer({
 router.use(requireAuth);
 
 router.get('/', async (_req, res) => {
+  // Never select `fileData` here — listing must not pull every PDF's bytes into
+  // memory. `originalName`/`fileSize` are always set alongside the bytes, so
+  // they're enough to tell whether a file is present.
   const textbooksRaw = await prisma.textbook.findMany({
     orderBy: { textbookName: 'asc' },
     select: {
       id: true,
       textbookName: true,
       subject: true,
-      fileName: true,
       originalName: true,
       fileSize: true,
       mimeType: true,
@@ -60,7 +47,7 @@ router.get('/', async (_req, res) => {
     id: t.id.toString(),
     textbookName: t.textbookName,
     subject: t.subject,
-    hasFile: Boolean(t.fileName),
+    hasFile: Boolean(t.originalName),
     originalName: t.originalName,
     fileSize: t.fileSize ? Number(t.fileSize) : null,
     createdAt: t.createdAt.toISOString(),
@@ -90,15 +77,8 @@ router.post(
       const subject = (req.body?.subject ?? '').trim() || null;
       const file = req.file;
 
-      // Validation: if it fails after the file landed on disk, clean it up so we
-      // don't leak orphaned uploads.
-      const fail = (status: number, message: string) => {
-        if (file) fs.promises.unlink(file.path).catch(() => {});
-        return res.status(status).json({ message });
-      };
-
       if (!textbookName) {
-        return fail(400, 'Textbook name is required.');
+        return res.status(400).json({ message: 'Textbook name is required.' });
       }
       if (!file) {
         return res.status(400).json({ message: 'A PDF file is required.' });
@@ -109,7 +89,8 @@ router.post(
           data: {
             textbookName,
             subject,
-            fileName: file.filename,
+            // `file.buffer` holds the raw PDF (memory storage); persisted as BYTEA.
+            fileData: file.buffer,
             originalName: file.originalname,
             fileSize: BigInt(file.size),
             mimeType: file.mimetype,
@@ -126,7 +107,7 @@ router.post(
           },
         });
       } catch {
-        return fail(500, 'Could not save the textbook.');
+        return res.status(500).json({ message: 'Could not save the textbook.' });
       }
     });
   }
@@ -143,27 +124,26 @@ router.get('/:id/file', async (req, res) => {
 
   const textbook = await prisma.textbook.findUnique({
     where: { id },
-    select: { fileName: true, originalName: true, mimeType: true },
+    select: { fileData: true, originalName: true, mimeType: true },
   });
 
-  if (!textbook?.fileName) {
+  if (!textbook?.fileData) {
     return res.status(404).json({ message: 'No file found for this textbook.' });
   }
 
-  const filePath = path.join(UPLOAD_DIR, textbook.fileName);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ message: 'File is missing from storage.' });
-  }
+  // Prisma returns BYTEA as a Node Buffer; send it straight back.
+  const body = Buffer.from(textbook.fileData);
 
   // `?download=1` forces a save dialog; otherwise the PDF opens inline in the
   // browser's viewer so the whole book can be read in-app.
   const disposition = req.query.download ? 'attachment' : 'inline';
   res.setHeader('Content-Type', textbook.mimeType ?? 'application/pdf');
+  res.setHeader('Content-Length', String(body.length));
   res.setHeader(
     'Content-Disposition',
     `${disposition}; filename="${encodeURIComponent(textbook.originalName ?? 'textbook.pdf')}"`
   );
-  return res.sendFile(filePath);
+  return res.send(body);
 });
 
 export default router;
