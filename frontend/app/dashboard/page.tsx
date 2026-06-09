@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 
 type SessionData = {
@@ -42,11 +41,6 @@ export default function DashboardPage() {
     };
   }, [router]);
 
-  async function handleLogout() {
-    await apiFetch("/api/auth/logout", { method: "POST" });
-    router.replace("/");
-  }
-
   if (loading || !session) {
     return (
       <main className="main-shell">
@@ -64,19 +58,8 @@ export default function DashboardPage() {
           <div>
             <h1 className="page-title">Dashboard</h1>
             <p className="description">
-              Welcome back, {session.fullName}. Use the navigation links to
-              manage users and view available features.
+              Welcome back. Use the navigation links to view available features.
             </p>
-          </div>
-          <div className="nav-links">
-            <button className="nav-link" type="button" onClick={handleLogout}>
-              Logout
-            </button>
-            {session.role === "ADMIN" ? (
-              <Link className="nav-link" href="/admin/users">
-                Manage Users
-              </Link>
-            ) : null}
           </div>
         </div>
 
