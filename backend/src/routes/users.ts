@@ -17,6 +17,7 @@ router.get('/', async (_req, res) => {
       email: true,
       role: true,
       status: true,
+      contactNumber: true,
       createdAt: true,
     },
   });
@@ -27,6 +28,7 @@ router.get('/', async (_req, res) => {
     email: u.email,
     role: u.role,
     status: u.status,
+    contactNumber: u.contactNumber,
     createdAt: u.createdAt.toISOString(),
   }));
 
@@ -34,12 +36,19 @@ router.get('/', async (_req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { fullName, email, password, role } = req.body ?? {};
+  const { fullName, email, password, role, contactNumber } = req.body ?? {};
 
   if (!fullName || !email || !password || !role) {
     return res
       .status(400)
       .json({ message: 'Full name, email, password and role are required.' });
+  }
+
+  // Contact number is collected and stored only for Learner/Viewer accounts.
+  if (role === 'VIEWER' && !contactNumber) {
+    return res
+      .status(400)
+      .json({ message: 'Contact number is required for Learner/Viewer accounts.' });
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -55,6 +64,7 @@ router.post('/', async (req, res) => {
       passwordHash,
       role,
       status: 'ACTIVE',
+      contactNumber: role === 'VIEWER' ? contactNumber : null,
     },
   });
 

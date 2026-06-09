@@ -260,6 +260,95 @@ tr:last-child td {
 }
 
 /* ------------------------------------------------------------------ */
+/* Top bar (auth / user-management module)                             */
+/* ------------------------------------------------------------------ */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.85rem 1.5rem;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.topbar-create {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+
+.topbar-create:hover {
+  background: #1d4ed8;
+}
+
+.topbar-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.4rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  font-weight: 600;
+  color: #0f172a;
+  transition: background 0.15s ease;
+}
+
+.topbar-user:hover {
+  background: #e2e8f0;
+}
+
+.topbar-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.topbar-name {
+  font-size: 0.95rem;
+}
+
+.topbar-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.05rem;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.topbar-logout:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* ------------------------------------------------------------------ */
 /* Textbook Management module                                          */
 /* ------------------------------------------------------------------ */
 

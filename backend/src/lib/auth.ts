@@ -10,6 +10,7 @@ export type SessionPayload = {
   fullName: string;
   role: string;
   status: string;
+  contactNumber?: string | null;
 };
 
 export async function hashPassword(password: string) {

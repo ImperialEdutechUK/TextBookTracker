@@ -45,6 +45,7 @@ router.post('/login', async (req, res) => {
     fullName: user.fullName,
     role: user.role,
     status: user.status,
+    contactNumber: user.contactNumber,
   });
 
   res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 60 * 60 * 24 * 1000 });

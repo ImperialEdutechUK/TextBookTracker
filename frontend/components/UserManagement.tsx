@@ -9,11 +9,22 @@ type User = {
   email: string;
   role: string;
   status: string;
+  contactNumber?: string | null;
   createdAt: string;
 };
 
-const roles = ['ADMIN', 'CREATOR', 'MANAGER', 'VIEWER'];
+// Values match the backend Role enum; labels are what we show in the UI.
+const roles: { value: string; label: string }[] = [
+  { value: 'ADMIN', label: 'Admin' },
+  { value: 'CREATOR', label: 'Creator' },
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'VIEWER', label: 'Learner/ Viewer' },
+];
 const statuses = ['ACTIVE', 'INACTIVE', 'SUSPENDED'];
+
+function roleLabel(role: string) {
+  return roles.find((r) => r.value === role)?.label ?? role;
+}
 
 function statusClass(status: string) {
   if (status === 'ACTIVE') return 'status-pill status-active';
@@ -25,7 +36,7 @@ export default function UserManager() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', role: 'CREATOR' });
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', role: 'CREATOR', contactNumber: '' });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   async function loadUsers() {
@@ -48,10 +59,19 @@ export default function UserManager() {
   async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    const payload = {
+      fullName: form.fullName,
+      email: form.email,
+      password: form.password,
+      role: form.role,
+      // Contact number is only relevant for Learner/Viewer accounts.
+      contactNumber: form.role === 'VIEWER' ? form.contactNumber : undefined,
+    };
+
     const response = await apiFetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -60,7 +80,7 @@ export default function UserManager() {
       return;
     }
 
-    setForm({ fullName: '', email: '', password: '', role: 'CREATOR' });
+    setForm({ fullName: '', email: '', password: '', role: 'CREATOR', contactNumber: '' });
     await loadUsers();
   }
 
@@ -131,12 +151,25 @@ export default function UserManager() {
               onChange={(event) => handleFieldChange('role', event.target.value)}
             >
               {roles.map((role) => (
-                <option key={role} value={role}>
-                  {role}
+                <option key={role.value} value={role.value}>
+                  {role.label}
                 </option>
               ))}
             </select>
           </label>
+          {form.role === 'VIEWER' ? (
+            <label>
+              Contact Number
+              <input
+                className="input"
+                type="tel"
+                value={form.contactNumber}
+                onChange={(event) => handleFieldChange('contactNumber', event.target.value)}
+                placeholder="e.g. +44 7700 900123"
+                required
+              />
+            </label>
+          ) : null}
           <button className="btn" type="submit">
             Create User
           </button>
@@ -161,6 +194,7 @@ export default function UserManager() {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Contact</th>
                   <th>Status</th>
                   <th>Created</th>
                   <th>Actions</th>
@@ -171,7 +205,8 @@ export default function UserManager() {
                   <tr key={user.id}>
                     <td>{user.fullName}</td>
                     <td>{user.email}</td>
-                    <td>{user.role}</td>
+                    <td>{roleLabel(user.role)}</td>
+                    <td>{user.contactNumber || '—'}</td>
                     <td>
                       <span className={statusClass(user.status)}>{user.status}</span>
                     </td>

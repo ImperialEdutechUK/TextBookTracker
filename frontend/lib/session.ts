@@ -11,6 +11,7 @@ export type SessionData = {
   fullName: string;
   role: Role;
   status: string;
+  contactNumber?: string | null;
 };
 
 type SessionState = {
