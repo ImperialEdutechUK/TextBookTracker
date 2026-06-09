@@ -57,9 +57,10 @@ model Textbook {
   id           BigInt   @id @default(autoincrement()) @map("textbook_id")
   textbookName String   @map("textbook_name")
   subject      String?
-  // Uploaded PDF metadata. Files live on disk under the backend uploads
-  // directory; only the stored filename + original name/size/type are kept here.
-  fileName     String?  @map("file_name")
+  // Uploaded PDF. The raw bytes are stored in the database (BYTEA) so the file
+  // is available to every backend instance and survives ephemeral filesystems;
+  // originalName/size/type are kept for download headers and listing.
+  fileData     Bytes?   @map("file_data")
   originalName String?  @map("original_name")
   fileSize     BigInt?  @map("file_size")
   mimeType     String?  @map("mime_type")
