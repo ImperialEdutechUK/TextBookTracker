@@ -18,6 +18,7 @@ router.get('/', async (_req, res) => {
       role: true,
       status: true,
       contactNumber: true,
+      address: true,
       createdAt: true,
     },
   });
@@ -29,6 +30,7 @@ router.get('/', async (_req, res) => {
     role: u.role,
     status: u.status,
     contactNumber: u.contactNumber,
+    address: u.address,
     createdAt: u.createdAt.toISOString(),
   }));
 
@@ -36,7 +38,7 @@ router.get('/', async (_req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { fullName, email, password, role, contactNumber } = req.body ?? {};
+  const { fullName, email, password, role, contactNumber, address } = req.body ?? {};
 
   if (!fullName || !email || !password || !role) {
     return res
@@ -44,11 +46,18 @@ router.post('/', async (req, res) => {
       .json({ message: 'Full name, email, password and role are required.' });
   }
 
-  // Contact number is collected and stored only for Learner/Viewer accounts.
+  // Contact number and address are collected and stored only for Learner/Viewer
+  // accounts.
   if (role === 'VIEWER' && !contactNumber) {
     return res
       .status(400)
       .json({ message: 'Contact number is required for Learner/Viewer accounts.' });
+  }
+
+  if (role === 'VIEWER' && !address) {
+    return res
+      .status(400)
+      .json({ message: 'Address is required for Learner/Viewer accounts.' });
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -65,6 +74,7 @@ router.post('/', async (req, res) => {
       role,
       status: 'ACTIVE',
       contactNumber: role === 'VIEWER' ? contactNumber : null,
+      address: role === 'VIEWER' ? address : null,
     },
   });
 

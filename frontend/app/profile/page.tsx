@@ -70,10 +70,16 @@ export default function ProfilePage() {
             </dd>
           </div>
           {isLearner ? (
-            <div>
-              <dt>Contact Number</dt>
-              <dd>{session.contactNumber || '—'}</dd>
-            </div>
+            <>
+              <div>
+                <dt>Contact Number</dt>
+                <dd>{session.contactNumber || '—'}</dd>
+              </div>
+              <div>
+                <dt>Address</dt>
+                <dd>{session.address || '—'}</dd>
+              </div>
+            </>
           ) : null}
         </dl>
       </div>

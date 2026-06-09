@@ -11,6 +11,7 @@ export type SessionPayload = {
   role: string;
   status: string;
   contactNumber?: string | null;
+  address?: string | null;
 };
 
 export async function hashPassword(password: string) {
