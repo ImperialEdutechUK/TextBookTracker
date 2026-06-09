@@ -10,6 +10,7 @@ type User = {
   role: string;
   status: string;
   contactNumber?: string | null;
+  address?: string | null;
   createdAt: string;
 };
 
@@ -36,7 +37,7 @@ export default function UserManager() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', role: 'CREATOR', contactNumber: '' });
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', role: 'CREATOR', contactNumber: '', address: '' });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   async function loadUsers() {
@@ -64,8 +65,9 @@ export default function UserManager() {
       email: form.email,
       password: form.password,
       role: form.role,
-      // Contact number is only relevant for Learner/Viewer accounts.
+      // Contact number and address are only relevant for Learner/Viewer accounts.
       contactNumber: form.role === 'VIEWER' ? form.contactNumber : undefined,
+      address: form.role === 'VIEWER' ? form.address : undefined,
     };
 
     const response = await apiFetch('/api/users', {
@@ -80,7 +82,7 @@ export default function UserManager() {
       return;
     }
 
-    setForm({ fullName: '', email: '', password: '', role: 'CREATOR', contactNumber: '' });
+    setForm({ fullName: '', email: '', password: '', role: 'CREATOR', contactNumber: '', address: '' });
     await loadUsers();
   }
 
@@ -158,17 +160,30 @@ export default function UserManager() {
             </select>
           </label>
           {form.role === 'VIEWER' ? (
-            <label>
-              Contact Number
-              <input
-                className="input"
-                type="tel"
-                value={form.contactNumber}
-                onChange={(event) => handleFieldChange('contactNumber', event.target.value)}
-                placeholder="e.g. +44 7700 900123"
-                required
-              />
-            </label>
+            <>
+              <label>
+                Contact Number
+                <input
+                  className="input"
+                  type="tel"
+                  value={form.contactNumber}
+                  onChange={(event) => handleFieldChange('contactNumber', event.target.value)}
+                  placeholder="e.g. +44 7700 900123"
+                  required
+                />
+              </label>
+              <label>
+                Address
+                <input
+                  className="input"
+                  type="text"
+                  value={form.address}
+                  onChange={(event) => handleFieldChange('address', event.target.value)}
+                  placeholder="e.g. 10 Downing Street, London"
+                  required
+                />
+              </label>
+            </>
           ) : null}
           <button className="btn" type="submit">
             Create User
@@ -195,6 +210,7 @@ export default function UserManager() {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Contact</th>
+                  <th>Address</th>
                   <th>Status</th>
                   <th>Created</th>
                   <th>Actions</th>
@@ -207,6 +223,7 @@ export default function UserManager() {
                     <td>{user.email}</td>
                     <td>{roleLabel(user.role)}</td>
                     <td>{user.contactNumber || '—'}</td>
+                    <td>{user.address || '—'}</td>
                     <td>
                       <span className={statusClass(user.status)}>{user.status}</span>
                     </td>

@@ -12,6 +12,7 @@ export type SessionData = {
   role: Role;
   status: string;
   contactNumber?: string | null;
+  address?: string | null;
 };
 
 type SessionState = {
