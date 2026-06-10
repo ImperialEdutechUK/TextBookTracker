@@ -1,18 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
-
-type User = {
-  id: number;
-  fullName: string;
-  email: string;
-  role: string;
-  status: string;
-  contactNumber?: string | null;
-  address?: string | null;
-  createdAt: string;
-};
 
 // Values match the backend Role enum; labels are what we show in the UI.
 const roles: { value: string; label: string }[] = [
@@ -21,45 +11,16 @@ const roles: { value: string; label: string }[] = [
   { value: 'MANAGER', label: 'Manager' },
   { value: 'VIEWER', label: 'Learner/ Viewer' },
 ];
-const statuses = ['ACTIVE', 'INACTIVE', 'SUSPENDED'];
-
-function roleLabel(role: string) {
-  return roles.find((r) => r.value === role)?.label ?? role;
-}
-
-function statusClass(status: string) {
-  if (status === 'ACTIVE') return 'status-pill status-active';
-  if (status === 'SUSPENDED') return 'status-pill status-suspended';
-  return 'status-pill status-inactive';
-}
 
 export default function UserManager() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [form, setForm] = useState({ fullName: '', email: '', password: '', role: 'CREATOR', contactNumber: '', address: '' });
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-
-  async function loadUsers() {
-    setLoading(true);
-    const response = await apiFetch('/api/users');
-    if (!response.ok) {
-      setError('Unable to load users.');
-      setLoading(false);
-      return;
-    }
-    const data = await response.json();
-    setUsers(data.users);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    loadUsers();
-  }, []);
 
   async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    setSuccess('');
     const payload = {
       fullName: form.fullName,
       email: form.email,
@@ -77,44 +38,35 @@ export default function UserManager() {
     });
 
     if (!response.ok) {
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
       setError(data?.message || 'Could not create user.');
       return;
     }
 
     setForm({ fullName: '', email: '', password: '', role: 'CREATOR', contactNumber: '', address: '' });
-    await loadUsers();
-  }
-
-  async function handleUpdateStatus(id: number, status: string) {
-    const response = await apiFetch(`/api/users/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    if (response.ok) {
-      await loadUsers();
-    }
-  }
-
-  async function handleDisable(id: number) {
-    await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
-    await loadUsers();
-  }
-
-  function handleSelect(user: User) {
-    setSelectedUser(user);
+    setSuccess('User created successfully.');
   }
 
   function handleFieldChange(field: string, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+    setSuccess('');
   }
 
   return (
     <div>
       <div className="card">
-        <h2>Create New User</h2>
-        <form onSubmit={handleCreate} className="form-grid">
+        <div className="header" style={{ marginBottom: '1rem' }}>
+          <div>
+            <h2 style={{ margin: 0 }}>Create New User</h2>
+            <p className="description" style={{ margin: '0.35rem 0 0' }}>
+              Add a team member or learner and assign their role.
+            </p>
+          </div>
+          <Link href="/admin/users/directory" className="btn secondary">
+            View Available Users
+          </Link>
+        </div>
+        <form onSubmit={handleCreate} className="form-grid two-cols">
           <label>
             Full Name
             <input
@@ -185,85 +137,15 @@ export default function UserManager() {
               </label>
             </>
           ) : null}
-          <button className="btn" type="submit">
-            Create User
-          </button>
+          <div className="form-actions">
+            <button className="btn" type="submit">
+              Create User
+            </button>
+          </div>
         </form>
         {error ? <div className="alert">{error}</div> : null}
+        {success ? <div className="alert alert-success">{success}</div> : null}
       </div>
-
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <div className="header">
-          <div>
-            <h2>User Directory</h2>
-            <p className="description">Review all users and update account status.</p>
-          </div>
-        </div>
-        {loading ? (
-          <p>Loading users...</p>
-        ) : (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Contact</th>
-                  <th>Address</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.id}>
-                    <td>{user.fullName}</td>
-                    <td>{user.email}</td>
-                    <td>{roleLabel(user.role)}</td>
-                    <td>{user.contactNumber || '—'}</td>
-                    <td>{user.address || '—'}</td>
-                    <td>
-                      <span className={statusClass(user.status)}>{user.status}</span>
-                    </td>
-                    <td>{new Date(user.createdAt).toLocaleDateString()}</td>
-                    <td>
-                      <button className="btn secondary" type="button" onClick={() => handleSelect(user)}>
-                        Edit
-                      </button>
-                      <button className="btn secondary" type="button" onClick={() => handleDisable(user.id)} style={{ marginLeft: '0.5rem' }}>
-                        Disable
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {selectedUser ? (
-        <div className="card" style={{ marginTop: '1rem' }}>
-          <h2>Edit User: {selectedUser.fullName}</h2>
-          <div className="form-grid two-cols">
-            <label>
-              Status
-              <select className="select" value={selectedUser.status} onChange={(event) => handleUpdateStatus(selectedUser.id, event.target.value)}>
-                {statuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p style={{ alignSelf: 'end' }}>
-              Click a different status to save changes automatically.
-            </p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -94,6 +94,11 @@ select {
   padding: 2rem 1.5rem;
 }
 
+/* Wider shell for list/directory views that benefit from the full width. */
+.main-shell-wide {
+  max-width: 1400px;
+}
+
 .card {
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -148,9 +153,50 @@ select {
   font-weight: 600;
 }
 
+.btn:hover {
+  background: #1d4ed8;
+}
+
 .btn.secondary {
   background: #e5e7eb;
   color: #111827;
+}
+
+.btn.secondary:hover {
+  background: #d1d5db;
+}
+
+/* Outlined neutral button (e.g. Cancel / Disable). */
+.btn.ghost {
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.btn.ghost:hover {
+  background: #f3f4f6;
+}
+
+/* Destructive button. */
+.btn.danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn.danger:hover {
+  background: #b91c1c;
+}
+
+/* Compact button for inline table actions. */
+.btn.sm {
+  padding: 0.5rem 0.95rem;
+  font-size: 0.875rem;
+  border-radius: 10px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .alert {
@@ -616,4 +662,260 @@ tr:last-child td {
 .catalog .row-actions .btn {
   padding: 0.45rem 0.85rem;
   text-decoration: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* User Management module                                              */
+/* ------------------------------------------------------------------ */
+
+/* Inline action buttons in the user directory table. */
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Directory header with title on the left and the name search on the right. */
+.directory-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Search box with a leading magnifier icon. */
+.search-field {
+  position: relative;
+  flex: 1 1 280px;
+  max-width: 360px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.search-input {
+  margin-top: 0;
+  padding-left: 2.6rem;
+}
+
+.search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+/* Responsive card grid for the user directory — fills the available width and
+   wraps instead of forcing a horizontal scroll. */
+.user-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.user-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.35rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.user-card:hover {
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
+  transform: translateY(-2px);
+}
+
+.user-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.user-avatar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.user-card-identity {
+  min-width: 0;
+}
+
+.user-card-name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card-email {
+  display: block;
+  color: #6b7280;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.user-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.user-card-details > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.user-card-details dt {
+  flex: 0 0 72px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.user-card-details dd {
+  margin: 0;
+  font-weight: 500;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.user-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+.user-card-actions .btn {
+  flex: 1 1 auto;
+}
+
+/* Right-aligned action row that spans the full width of a form grid. */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.form-grid.two-cols .form-actions {
+  grid-column: 1 / -1;
+}
+
+/* Locked identity fields shown above the edit form. */
+.readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.readonly-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.readonly-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.readonly-value {
+  font-weight: 600;
+  color: #111827;
+  word-break: break-word;
+}
+
+/* Confirmation dialog (e.g. delete user). */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1.75rem;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+
+.modal.modal-wide {
+  max-width: 600px;
+}
+
+.modal-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.modal-text {
+  margin: 0 0 1.5rem;
+  color: #4b5563;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.modal-actions .btn {
+  min-width: 88px;
 }
