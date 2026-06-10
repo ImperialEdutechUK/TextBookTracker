@@ -83,9 +83,9 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   const userId = Number(req.params.id);
-  const { status, role } = req.body ?? {};
+  const { status, role, fullName, contactNumber, address } = req.body ?? {};
 
-  const updateData: Record<string, string> = {};
+  const updateData: Record<string, string | null> = {};
 
   if (status) {
     if (!['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(status)) {
@@ -101,6 +101,25 @@ router.put('/:id', async (req, res) => {
     updateData.role = role;
   }
 
+  // Editable profile details. Email and role intentionally stay locked from the
+  // edit-user flow in the admin UI.
+  if (fullName !== undefined) {
+    if (typeof fullName !== 'string' || fullName.trim() === '') {
+      return res.status(400).json({ message: 'Full name cannot be empty.' });
+    }
+    updateData.fullName = fullName.trim();
+  }
+
+  if (contactNumber !== undefined) {
+    const trimmed = typeof contactNumber === 'string' ? contactNumber.trim() : '';
+    updateData.contactNumber = trimmed === '' ? null : trimmed;
+  }
+
+  if (address !== undefined) {
+    const trimmed = typeof address === 'string' ? address.trim() : '';
+    updateData.address = trimmed === '' ? null : trimmed;
+  }
+
   if (Object.keys(updateData).length === 0) {
     return res
       .status(400)
@@ -111,13 +130,35 @@ router.put('/:id', async (req, res) => {
   return res.json({ message: 'User updated successfully.' });
 });
 
-router.delete('/:id', async (req, res) => {
+// Soft-disable: keeps the record but blocks access by flipping status.
+router.patch('/:id/disable', async (req, res) => {
   const userId = Number(req.params.id);
   await prisma.user.update({
     where: { id: userId },
     data: { status: 'INACTIVE' },
   });
   return res.json({ message: 'User disabled successfully.' });
+});
+
+// Permanent delete: removes the user record entirely. Fails gracefully if the
+// user is still referenced by textbook requests/history (foreign keys).
+router.delete('/:id', async (req, res) => {
+  const userId = Number(req.params.id);
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+    return res.json({ message: 'User deleted successfully.' });
+  } catch (error: any) {
+    if (error?.code === 'P2003') {
+      return res.status(409).json({
+        message:
+          'This user is linked to textbook records and cannot be deleted. Disable the account instead.',
+      });
+    }
+    if (error?.code === 'P2025') {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    throw error;
+  }
 });
 
 export default router;

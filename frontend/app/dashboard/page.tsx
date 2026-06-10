@@ -12,11 +12,6 @@ type SessionData = {
   status: string;
 };
 
-function RoleBadge({ role }: { role: string }) {
-  const className = `badge ${role === "ADMIN" ? "badge-admin" : role === "MANAGER" ? "badge-manager" : role === "CREATOR" ? "badge-creator" : "badge-viewer"}`;
-  return <span className={className}>{role.replace("_", " ")}</span>;
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<SessionData | null>(null);
@@ -61,30 +56,6 @@ export default function DashboardPage() {
               Welcome back. Use the navigation links to view available features.
             </p>
           </div>
-        </div>
-
-        <div className="card">
-          <h2>Account Information</h2>
-          <p>
-            <strong>Email:</strong> {session.email}
-          </p>
-          <p>
-            <strong>Role:</strong> <RoleBadge role={session.role} />
-          </p>
-          <p>
-            <strong>Status:</strong>{" "}
-            <span
-              className={
-                session.status === "ACTIVE"
-                  ? "status-pill status-active"
-                  : session.status === "SUSPENDED"
-                    ? "status-pill status-suspended"
-                    : "status-pill status-inactive"
-              }
-            >
-              {session.status}
-            </span>
-          </p>
         </div>
 
         <div className="card" style={{ marginTop: "1rem" }}>
