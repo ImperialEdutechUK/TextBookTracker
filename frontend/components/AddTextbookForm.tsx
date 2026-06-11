@@ -3,8 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createTextbook } from '@/lib/textbooks';
-
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // keep in sync with the backend limit
+import { generatePdfCover } from '@/lib/pdfCover';
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -28,10 +27,6 @@ export default function AddTextbookForm({ onAdded }: { onAdded?: () => void }) {
     if (!candidate) return;
     if (candidate.type !== 'application/pdf') {
       setError('Only PDF files are allowed.');
-      return;
-    }
-    if (candidate.size > MAX_FILE_SIZE) {
-      setError('The PDF is too large (max 25 MB).');
       return;
     }
     setFile(candidate);
@@ -59,10 +54,14 @@ export default function AddTextbookForm({ onAdded }: { onAdded?: () => void }) {
 
     setSaving(true);
     try {
+      // Render a small first-page thumbnail in the browser so the catalog can
+      // show lightweight covers. Best-effort — upload proceeds even if it fails.
+      const cover = await generatePdfCover(file);
       const created = await createTextbook({
         textbookName: textbookName.trim(),
         subject: subject.trim() || undefined,
         pdf: file,
+        cover,
       });
       setSuccess(`"${created.textbookName}" was added to the catalog.`);
       setTextbookName('');
@@ -149,7 +148,7 @@ export default function AddTextbookForm({ onAdded }: { onAdded?: () => void }) {
             <div className="dropzone-prompt">
               <strong>Drag &amp; drop</strong> a PDF here, or{' '}
               <span className="dropzone-browse">browse</span>
-              <small>PDF only, up to 25 MB</small>
+              <small>PDF only</small>
             </div>
           )}
         </div>

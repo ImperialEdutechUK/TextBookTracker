@@ -1,4 +1,5 @@
-import AddTextbookSection from '@/components/AddTextbookSection';
+import Link from 'next/link';
+import AddTextbookForm from '@/components/AddTextbookForm';
 
 export default function AddTextbookPage() {
   return (
@@ -12,8 +13,11 @@ export default function AddTextbookPage() {
               PDF.
             </p>
           </div>
+          <Link href="/textbooks/added" className="btn">
+            View Added Textbooks
+          </Link>
         </div>
-        <AddTextbookSection />
+        <AddTextbookForm />
       </div>
     </main>
   );

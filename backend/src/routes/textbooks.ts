@@ -5,15 +5,18 @@ import { requireAuth, requireRole } from '../middleware/requireAdmin';
 
 const router = Router();
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
-
 // Buffer the upload in memory so we can persist the raw bytes to the database
 // (the `file_data` BYTEA column). No file ever touches the local disk, so the
 // app works the same across multiple instances / ephemeral filesystems.
+// No file-size limit is imposed: textbook PDFs can be arbitrarily large.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
+    // `pdf` must be a PDF; the optional `cover` is a generated JPEG thumbnail.
+    if (file.fieldname === 'cover') {
+      cb(null, file.mimetype.startsWith('image/'));
+      return;
+    }
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
     } else {
@@ -21,6 +24,12 @@ const upload = multer({
     }
   },
 });
+
+// `pdf` is required; `cover` is an optional pre-rendered first-page thumbnail.
+const uploadFields = upload.fields([
+  { name: 'pdf', maxCount: 1 },
+  { name: 'cover', maxCount: 1 },
+]);
 
 // Any authenticated user may read the textbook catalog (needed to populate the
 // "Textbook Name" dropdown when creating a request).
@@ -39,6 +48,7 @@ router.get('/', async (_req, res) => {
       originalName: true,
       fileSize: true,
       mimeType: true,
+      coverMimeType: true,
       createdAt: true,
     },
   });
@@ -48,6 +58,7 @@ router.get('/', async (_req, res) => {
     textbookName: t.textbookName,
     subject: t.subject,
     hasFile: Boolean(t.originalName),
+    hasCover: Boolean(t.coverMimeType),
     originalName: t.originalName,
     fileSize: t.fileSize ? Number(t.fileSize) : null,
     createdAt: t.createdAt.toISOString(),
@@ -62,20 +73,17 @@ router.post(
   '/',
   requireRole('ADMIN', 'CREATOR', 'MANAGER'),
   (req, res) => {
-    upload.single('pdf')(req, res, async (err: unknown) => {
+    uploadFields(req, res, async (err: unknown) => {
       if (err) {
-        const message =
-          err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE'
-            ? 'The PDF is too large (max 25 MB).'
-            : err instanceof Error
-            ? err.message
-            : 'Upload failed.';
+        const message = err instanceof Error ? err.message : 'Upload failed.';
         return res.status(400).json({ message });
       }
 
       const textbookName = (req.body?.textbookName ?? '').trim();
       const subject = (req.body?.subject ?? '').trim() || null;
-      const file = req.file;
+      const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+      const file = files?.pdf?.[0];
+      const cover = files?.cover?.[0];
 
       if (!textbookName) {
         return res.status(400).json({ message: 'Textbook name is required.' });
@@ -94,6 +102,9 @@ router.post(
             originalName: file.originalname,
             fileSize: BigInt(file.size),
             mimeType: file.mimetype,
+            // Optional pre-rendered first-page thumbnail (small JPEG).
+            coverImage: cover?.buffer ?? null,
+            coverMimeType: cover?.mimetype ?? null,
           },
           select: { id: true, textbookName: true, subject: true, createdAt: true },
         });
@@ -106,12 +117,40 @@ router.post(
             createdAt: textbook.createdAt.toISOString(),
           },
         });
-      } catch {
+      } catch (err) {
+        console.error('Failed to save textbook:', err);
         return res.status(500).json({ message: 'Could not save the textbook.' });
       }
     });
   }
 );
+
+// Serve the small cover thumbnail (first page of the PDF). Used by the catalog
+// grid so cards load a ~30 KB image instead of the whole PDF.
+router.get('/:id/cover', async (req, res) => {
+  let id: bigint;
+  try {
+    id = BigInt(req.params.id);
+  } catch {
+    return res.status(400).json({ message: 'Invalid textbook id.' });
+  }
+
+  const textbook = await prisma.textbook.findUnique({
+    where: { id },
+    select: { coverImage: true, coverMimeType: true },
+  });
+
+  if (!textbook?.coverImage) {
+    return res.status(404).json({ message: 'No cover found for this textbook.' });
+  }
+
+  const body = Buffer.from(textbook.coverImage);
+  res.setHeader('Content-Type', textbook.coverMimeType ?? 'image/jpeg');
+  res.setHeader('Content-Length', String(body.length));
+  // Covers are immutable for a given textbook id, so let the browser cache them.
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  return res.send(body);
+});
 
 // Stream the stored PDF for download/inline viewing.
 router.get('/:id/file', async (req, res) => {
@@ -144,6 +183,34 @@ router.get('/:id/file', async (req, res) => {
     `${disposition}; filename="${encodeURIComponent(textbook.originalName ?? 'textbook.pdf')}"`
   );
   return res.send(body);
+});
+
+// Delete a textbook from the catalog. Restricted to the roles that manage it.
+router.delete('/:id', requireRole('ADMIN', 'CREATOR', 'MANAGER'), async (req, res) => {
+  let id: bigint;
+  try {
+    id = BigInt(req.params.id);
+  } catch {
+    return res.status(400).json({ message: 'Invalid textbook id.' });
+  }
+
+  try {
+    await prisma.textbook.delete({ where: { id } });
+    return res.status(204).send();
+  } catch (err) {
+    // P2025: row not found. P2003: still referenced by a textbook request.
+    const code = (err as { code?: string })?.code;
+    if (code === 'P2025') {
+      return res.status(404).json({ message: 'Textbook not found.' });
+    }
+    if (code === 'P2003') {
+      return res.status(409).json({
+        message: 'This textbook is linked to one or more requests and cannot be deleted.',
+      });
+    }
+    console.error('Failed to delete textbook:', err);
+    return res.status(500).json({ message: 'Could not delete the textbook.' });
+  }
 });
 
 export default router;
