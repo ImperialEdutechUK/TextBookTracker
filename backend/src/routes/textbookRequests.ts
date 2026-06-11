@@ -73,7 +73,8 @@ function parseId(value: unknown): bigint | null {
 router.get('/options', async (_req, res) => {
   const [learnersRaw, textbooksRaw] = await Promise.all([
     prisma.user.findMany({
-      where: { status: 'ACTIVE' },
+      // Learners are the VIEWER role only — other roles are not selectable.
+      where: { status: 'ACTIVE', role: 'VIEWER' },
       orderBy: { fullName: 'asc' },
       select: { id: true, fullName: true },
     }),
@@ -223,12 +224,12 @@ router.post('/', requireRole('CREATOR', 'ADMIN'), async (req, res) => {
   }
 
   const [learner, textbook] = await Promise.all([
-    prisma.user.findUnique({ where: { id: learnerId }, select: { status: true } }),
+    prisma.user.findUnique({ where: { id: learnerId }, select: { status: true, role: true } }),
     prisma.textbook.findUnique({ where: { id: textbookId }, select: { id: true } }),
   ]);
 
-  if (!learner || learner.status !== 'ACTIVE') {
-    return res.status(400).json({ message: 'Selected learner is not a valid active user.' });
+  if (!learner || learner.status !== 'ACTIVE' || learner.role !== 'VIEWER') {
+    return res.status(400).json({ message: 'Selected learner is not a valid active learner.' });
   }
   if (!textbook) {
     return res.status(400).json({ message: 'Selected textbook does not exist.' });
@@ -289,10 +290,10 @@ router.put('/:id', requireRole('CREATOR', 'ADMIN'), async (req, res) => {
     }
     const learner = await prisma.user.findUnique({
       where: { id: learnerId },
-      select: { status: true },
+      select: { status: true, role: true },
     });
-    if (!learner || learner.status !== 'ACTIVE') {
-      return res.status(400).json({ message: 'Selected learner is not a valid active user.' });
+    if (!learner || learner.status !== 'ACTIVE' || learner.role !== 'VIEWER') {
+      return res.status(400).json({ message: 'Selected learner is not a valid active learner.' });
     }
     data.learner = { connect: { id: learnerId } };
   }
