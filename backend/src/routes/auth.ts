@@ -34,6 +34,11 @@ router.post('/login', async (req, res) => {
       .json({ message: 'Invalid credentials or account is not active.' });
   }
 
+  // Accounts with no password (Learner/Viewer) can't authenticate here.
+  if (!user.passwordHash) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
+  }
+
   const passwordMatches = await comparePasswords(password, user.passwordHash);
   if (!passwordMatches) {
     return res.status(401).json({ message: 'Invalid credentials.' });

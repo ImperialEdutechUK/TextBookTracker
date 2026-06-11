@@ -24,8 +24,9 @@ export default function UserManager() {
     const payload = {
       fullName: form.fullName,
       email: form.email,
-      password: form.password,
       role: form.role,
+      // Viewers/Learners have no password; every other role requires one.
+      password: form.role === 'VIEWER' ? undefined : form.password,
       // Contact number and address are only relevant for Learner/Viewer accounts.
       contactNumber: form.role === 'VIEWER' ? form.contactNumber : undefined,
       address: form.role === 'VIEWER' ? form.address : undefined,
@@ -84,16 +85,10 @@ export default function UserManager() {
               type="email"
               value={form.email}
               onChange={(event) => handleFieldChange('email', event.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Password
-            <input
-              className="input"
-              type="password"
-              value={form.password}
-              onChange={(event) => handleFieldChange('password', event.target.value)}
+              // Accepts international/multi-level domains (e.g. @yahoo.com.hk).
+              // Placeholder domains like example.com are rejected on the server.
+              pattern="[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}"
+              title="Enter a valid email address, e.g. name@gmail.com"
               required
             />
           </label>
@@ -111,6 +106,19 @@ export default function UserManager() {
               ))}
             </select>
           </label>
+          {/* Viewers/Learners have no login, so they don't get a password. */}
+          {form.role === 'VIEWER' ? null : (
+            <label>
+              Password
+              <input
+                className="input"
+                type="password"
+                value={form.password}
+                onChange={(event) => handleFieldChange('password', event.target.value)}
+                required
+              />
+            </label>
+          )}
           {form.role === 'VIEWER' ? (
             <>
               <label>

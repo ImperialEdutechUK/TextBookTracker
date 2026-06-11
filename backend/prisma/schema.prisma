@@ -11,7 +11,9 @@ model User {
   id           BigInt   @id @default(autoincrement())
   fullName     String
   email        String   @unique
-  passwordHash String
+  // Null for Learner/Viewer accounts, which have no login. Every other role
+  // stores a bcrypt hash here.
+  passwordHash String?
   role         Role     @default(CREATOR)
   status       Status   @default(ACTIVE)
   // Contact number and address are only collected/stored for Learner/Viewer

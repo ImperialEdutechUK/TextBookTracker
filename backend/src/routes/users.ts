@@ -5,6 +5,38 @@ import { requireAdmin } from '../middleware/requireAdmin';
 
 const router = Router();
 
+// Accepts addresses with international/multi-level domains (e.g.
+// learner@yahoo.com.hk): a local part, an "@", a domain, and a top-level
+// domain of at least two letters. Deliberately permissive about the provider
+// so we don't reject valid worldwide domains, while requiring a real-looking
+// TLD instead of just "something with a dot".
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+
+// Reserved / placeholder domains that are syntactically valid but can never
+// receive real mail (RFC 2606 + RFC 6761). These are the classic test stand-ins
+// like test@example.com, so we reject them outright.
+const RESERVED_EMAIL_DOMAINS = new Set([
+  'example.com',
+  'example.net',
+  'example.org',
+  'example.edu',
+]);
+const RESERVED_EMAIL_TLDS = ['.test', '.example', '.invalid', '.localhost'];
+
+function isValidEmail(email: string): boolean {
+  if (typeof email !== 'string' || !EMAIL_REGEX.test(email)) {
+    return false;
+  }
+  const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
+  if (RESERVED_EMAIL_DOMAINS.has(domain)) {
+    return false;
+  }
+  if (RESERVED_EMAIL_TLDS.some((tld) => domain.endsWith(tld))) {
+    return false;
+  }
+  return true;
+}
+
 // All user-management endpoints require an ADMIN session.
 router.use(requireAdmin);
 
@@ -40,10 +72,23 @@ router.get('/', async (_req, res) => {
 router.post('/', async (req, res) => {
   const { fullName, email, password, role, contactNumber, address } = req.body ?? {};
 
-  if (!fullName || !email || !password || !role) {
+  if (!fullName || !email || !role) {
     return res
       .status(400)
-      .json({ message: 'Full name, email, password and role are required.' });
+      .json({ message: 'Full name, email and role are required.' });
+  }
+
+  // Validate the email format for everyone we create here. The pre-existing
+  // admin account is not re-validated since it is never created through this
+  // endpoint.
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ message: 'Please enter a valid email address.' });
+  }
+
+  // Learner/Viewer accounts are reference records with no login, so they carry
+  // no password. Every other role must set one.
+  if (role !== 'VIEWER' && !password) {
+    return res.status(400).json({ message: 'Password is required.' });
   }
 
   // Contact number and address are collected and stored only for Learner/Viewer
@@ -65,7 +110,9 @@ router.post('/', async (req, res) => {
     return res.status(409).json({ message: 'Email already exists.' });
   }
 
-  const passwordHash = await hashPassword(password);
+  // Viewers/Learners have no login, so their password hash stays null. Every
+  // other role gets a bcrypt hash.
+  const passwordHash = role === 'VIEWER' ? null : await hashPassword(password);
   await prisma.user.create({
     data: {
       fullName,
