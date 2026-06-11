@@ -86,6 +86,7 @@ export type CatalogTextbook = {
   textbookName: string;
   subject: string | null;
   hasFile: boolean;
+  hasCover: boolean;
   originalName: string | null;
   fileSize: number | null;
   createdAt: string;
@@ -113,6 +114,8 @@ export type NewTextbookInput = {
   textbookName: string;
   subject?: string;
   pdf: File;
+  // Optional pre-rendered first-page thumbnail (generated in the browser).
+  cover?: Blob | null;
 };
 
 export type CreatedTextbook = {
@@ -129,11 +132,17 @@ export async function createTextbook(input: NewTextbookInput): Promise<CreatedTe
   body.append('textbookName', input.textbookName);
   if (input.subject) body.append('subject', input.subject);
   body.append('pdf', input.pdf);
+  if (input.cover) body.append('cover', input.cover, 'cover.jpg');
 
   const res = await apiFetch('/api/textbooks', { method: 'POST', body });
   if (!res.ok) throw new Error(await readError(res, 'Could not add the textbook.'));
   const data = await res.json();
   return data.textbook as CreatedTextbook;
+}
+
+export async function deleteTextbook(id: string): Promise<void> {
+  const res = await apiFetch(`/api/textbooks/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(await readError(res, 'Could not delete the textbook.'));
 }
 
 export async function fetchFormOptions(): Promise<FormOptions> {

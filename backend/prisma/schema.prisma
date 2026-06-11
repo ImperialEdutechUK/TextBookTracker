@@ -68,6 +68,10 @@ model Textbook {
   originalName String?  @map("original_name")
   fileSize     BigInt?  @map("file_size")
   mimeType     String?  @map("mime_type")
+  // Small JPEG of the PDF's first page, rendered in the browser at upload time.
+  // Served to the catalog grid so cards never download the whole PDF for a cover.
+  coverImage    Bytes?  @map("cover_image")
+  coverMimeType String? @map("cover_mime_type")
   createdAt    DateTime @default(now()) @map("created_at")
 
   requests TextbookRequest[]
