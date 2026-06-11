@@ -1,49 +1,39 @@
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
 model User {
-  id           BigInt   @id @default(autoincrement())
-  fullName     String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(CREATOR)
-  status       Status   @default(ACTIVE)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // Back-relations owned by the Textbook Management module. These are virtual
-  // (no columns added to the User table), so they do not alter the auth module.
+  id                  BigInt    @id @default(autoincrement())
+  fullName            String
+  email               String    @unique
+  passwordHash        String
+  role                Role      @default(CREATOR)
+  status              Status    @default(ACTIVE)
+  contactNumber       String?   @map("contact_number")
+  course              String?
+  units               String?
+  address             String?
+  notificationsSeenAt DateTime? @map("notifications_seen_at")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   createdRequests TextbookRequest[]       @relation("RequestCreator")
   learnerRequests TextbookRequest[]       @relation("RequestLearner")
   statusChanges   TextbookStatusHistory[]
 }
-
 enum Role {
   ADMIN
   CREATOR
   MANAGER
   VIEWER
 }
-
 enum Status {
   ACTIVE
   INACTIVE
   SUSPENDED
 }
-
-// ---------------------------------------------------------------------------
-// Textbook Management module
-// ---------------------------------------------------------------------------
-
-// Lifecycle of a textbook request. Status *transitions* are owned by the
-// Workflow / Status Tracking module; this module only sets the initial CREATED
-// state and renders the history.
 enum TextbookStatus {
   CREATED
   REQUESTED_BY_LEARNER
@@ -51,25 +41,19 @@ enum TextbookStatus {
   SENT_TO_PRINT
   PRINTED
 }
-
-// Available textbook catalog.
 model Textbook {
   id           BigInt   @id @default(autoincrement()) @map("textbook_id")
   textbookName String   @map("textbook_name")
+  author       String?
   subject      String?
-  // Uploaded PDF metadata. Files live on disk under the backend uploads
-  // directory; only the stored filename + original name/size/type are kept here.
   fileName     String?  @map("file_name")
   originalName String?  @map("original_name")
   fileSize     BigInt?  @map("file_size")
   mimeType     String?  @map("mime_type")
   createdAt    DateTime @default(now()) @map("created_at")
-
   requests TextbookRequest[]
-
   @@map("textbooks")
 }
-
 model TextbookRequest {
   id            BigInt         @id @default(autoincrement()) @map("request_id")
   learnerId     BigInt         @map("learner_id")
@@ -79,29 +63,24 @@ model TextbookRequest {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   deletedAt     DateTime?      @map("deleted_at")
-
   learner       User                    @relation("RequestLearner", fields: [learnerId], references: [id])
   creator       User                    @relation("RequestCreator", fields: [creatorId], references: [id])
   textbook      Textbook                @relation(fields: [textbookId], references: [id])
   statusHistory TextbookStatusHistory[]
-
   @@index([learnerId])
   @@index([creatorId])
   @@index([textbookId])
   @@index([currentStatus])
   @@map("textbook_requests")
 }
-
 model TextbookStatusHistory {
   id        BigInt         @id @default(autoincrement()) @map("history_id")
   requestId BigInt         @map("request_id")
   status    TextbookStatus
   changedBy BigInt         @map("changed_by")
   changedAt DateTime       @default(now()) @map("changed_at")
-
   request       TextbookRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   changedByUser User            @relation(fields: [changedBy], references: [id])
-
   @@index([requestId])
   @@map("textbook_status_history")
 }

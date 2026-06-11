@@ -8,8 +8,6 @@ import { requireAuth, requireRole } from '../middleware/requireAdmin';
 
 const router = Router();
 
-// Where uploaded PDFs are stored on disk. Kept outside source control via the
-// backend .gitignore; created on boot so the first upload never fails.
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'textbooks');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -18,8 +16,6 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
   filename: (_req, file, cb) => {
-    // Store under a random, collision-free name; the original name is kept in
-    // the DB for display/download.
     const unique = crypto.randomBytes(16).toString('hex');
     cb(null, `${unique}${path.extname(file.originalname).toLowerCase()}`);
   },
@@ -37,8 +33,6 @@ const upload = multer({
   },
 });
 
-// Any authenticated user may read the textbook catalog (needed to populate the
-// "Textbook Name" dropdown when creating a request).
 router.use(requireAuth);
 
 router.get('/', async (_req, res) => {
@@ -47,6 +41,7 @@ router.get('/', async (_req, res) => {
     select: {
       id: true,
       textbookName: true,
+      author: true,
       subject: true,
       fileName: true,
       originalName: true,
@@ -59,6 +54,7 @@ router.get('/', async (_req, res) => {
   const textbooks = textbooksRaw.map((t) => ({
     id: t.id.toString(),
     textbookName: t.textbookName,
+    author: t.author,
     subject: t.subject,
     hasFile: Boolean(t.fileName),
     originalName: t.originalName,
@@ -69,8 +65,6 @@ router.get('/', async (_req, res) => {
   return res.json({ textbooks });
 });
 
-// Create a textbook with an uploaded PDF. Restricted to roles that manage the
-// catalog. multer parses the multipart body; `pdf` is the file field.
 router.post(
   '/',
   requireRole('ADMIN', 'CREATOR', 'MANAGER'),
@@ -87,11 +81,10 @@ router.post(
       }
 
       const textbookName = (req.body?.textbookName ?? '').trim();
+      const author = (req.body?.author ?? '').trim() || null;
       const subject = (req.body?.subject ?? '').trim() || null;
       const file = req.file;
 
-      // Validation: if it fails after the file landed on disk, clean it up so we
-      // don't leak orphaned uploads.
       const fail = (status: number, message: string) => {
         if (file) fs.promises.unlink(file.path).catch(() => {});
         return res.status(status).json({ message });
@@ -108,19 +101,21 @@ router.post(
         const textbook = await prisma.textbook.create({
           data: {
             textbookName,
+            author,
             subject,
             fileName: file.filename,
             originalName: file.originalname,
             fileSize: BigInt(file.size),
             mimeType: file.mimetype,
           },
-          select: { id: true, textbookName: true, subject: true, createdAt: true },
+          select: { id: true, textbookName: true, author: true, subject: true, createdAt: true },
         });
 
         return res.status(201).json({
           textbook: {
             id: textbook.id.toString(),
             textbookName: textbook.textbookName,
+            author: textbook.author,
             subject: textbook.subject,
             createdAt: textbook.createdAt.toISOString(),
           },
@@ -132,7 +127,6 @@ router.post(
   }
 );
 
-// Stream the stored PDF for download/inline viewing.
 router.get('/:id/file', async (req, res) => {
   let id: bigint;
   try {
@@ -155,8 +149,6 @@ router.get('/:id/file', async (req, res) => {
     return res.status(404).json({ message: 'File is missing from storage.' });
   }
 
-  // `?download=1` forces a save dialog; otherwise the PDF opens inline in the
-  // browser's viewer so the whole book can be read in-app.
   const disposition = req.query.download ? 'attachment' : 'inline';
   res.setHeader('Content-Type', textbook.mimeType ?? 'application/pdf');
   res.setHeader(

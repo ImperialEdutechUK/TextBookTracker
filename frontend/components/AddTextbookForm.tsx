@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createTextbook } from '@/lib/textbooks';
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // keep in sync with the backend limit
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -16,6 +16,7 @@ export default function AddTextbookForm({ onAdded }: { onAdded?: () => void }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [textbookName, setTextbookName] = useState('');
+  const [author, setAuthor] = useState('');
   const [subject, setSubject] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -61,11 +62,13 @@ export default function AddTextbookForm({ onAdded }: { onAdded?: () => void }) {
     try {
       const created = await createTextbook({
         textbookName: textbookName.trim(),
+        author: author.trim() || undefined,
         subject: subject.trim() || undefined,
         pdf: file,
       });
       setSuccess(`"${created.textbookName}" was added to the catalog.`);
       setTextbookName('');
+      setAuthor('');
       setSubject('');
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -88,6 +91,17 @@ export default function AddTextbookForm({ onAdded }: { onAdded?: () => void }) {
           onChange={(event) => setTextbookName(event.target.value)}
           placeholder="e.g. Introduction to Algorithms"
           required
+        />
+      </label>
+
+      <label>
+        Author <span className="field-optional">(optional)</span>
+        <input
+          className="input"
+          type="text"
+          value={author}
+          onChange={(event) => setAuthor(event.target.value)}
+          placeholder="e.g. K.A. Stroud"
         />
       </label>
 
