@@ -53,8 +53,8 @@ export default function LoginPage() {
         <p className="auth-subtitle">Login to your account to continue</p>
         <form onSubmit={handleSubmit} className="auth-form">
           <div>
-            <label className="field-label">Email address</label>
-            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Enter your email" />
+            <label className="field-label">Username</label>
+            <input className="input" type="text" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Enter your username" />
           </div>
           <div>
             <label className="field-label">Password</label>

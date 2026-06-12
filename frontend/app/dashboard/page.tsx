@@ -66,12 +66,12 @@ export default function DashboardPage() {
   const pending = (sc['CREATED'] ?? 0) + (sc['REQUESTED_BY_LEARNER'] ?? 0);
 
   const cards = [
-    { label: 'Total Textbooks',     value: stats?.totalTextbooks ?? 0,      icon: ICONS.book,    bg: '#eff6ff', fg: '#2563eb' },
-    { label: 'Pending',             value: pending,                          icon: ICONS.clock,   bg: '#fef3c7', fg: '#d97706' },
-    { label: 'Shared with Manager', value: sc['SHARED_WITH_MANAGER'] ?? 0,   icon: ICONS.share,   bg: '#ede9fe', fg: '#7c3aed' },
-    { label: 'Sent to Print',       value: sc['SENT_TO_PRINT'] ?? 0,         icon: ICONS.printer, bg: '#fce7f3', fg: '#db2777' },
-    { label: 'Printed',             value: sc['PRINTED'] ?? 0,               icon: ICONS.check,   bg: '#dcfce7', fg: '#16a34a' },
-    ...(session.role === 'ADMIN' ? [{ label: 'Users', value: stats?.totalUsers ?? 0, icon: ICONS.users, bg: '#f3e8ff', fg: '#9333ea' }] : []),
+    { label: 'Total Textbooks',     value: stats?.totalTextbooks ?? 0,    icon: ICONS.book,    bg: '#eff6ff', fg: '#2563eb', href: '/textbooks' },
+    { label: 'Pending',             value: pending,                        icon: ICONS.clock,   bg: '#fef3c7', fg: '#d97706', href: '/status' },
+    { label: 'Shared with Manager', value: sc['SHARED_WITH_MANAGER'] ?? 0, icon: ICONS.share,   bg: '#ede9fe', fg: '#7c3aed', href: '/status' },
+    { label: 'Sent to Print',       value: sc['SENT_TO_PRINT'] ?? 0,       icon: ICONS.printer, bg: '#fce7f3', fg: '#db2777', href: '/status' },
+    { label: 'Printed',             value: sc['PRINTED'] ?? 0,             icon: ICONS.check,   bg: '#dcfce7', fg: '#16a34a', href: '/status' },
+    ...(session.role === 'ADMIN' ? [{ label: 'Users', value: stats?.totalUsers ?? 0, icon: ICONS.users, bg: '#f3e8ff', fg: '#9333ea', href: '/admin/users' }] : []),
   ];
 
   return (
@@ -83,13 +83,17 @@ export default function DashboardPage() {
 
       <div className="stat-grid">
         {cards.map((c) => (
-          <div key={c.label} className="stat-card">
-            <p className="stat-label">{c.label}</p>
-            <div className="stat-card-row">
-              <p className="stat-value">{c.value}</p>
-              <span className="stat-icon-box" style={{ background: c.bg, color: c.fg }}>{c.icon}</span>
+          <Link key={c.label} href={c.href} style={{ textDecoration: 'none' }}>
+            <div className="stat-card" style={{ cursor: 'pointer', transition: 'box-shadow 0.15s ease, transform 0.15s ease' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(15,23,42,0.1)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = ''; (e.currentTarget as HTMLDivElement).style.transform = ''; }}>
+              <p className="stat-label">{c.label}</p>
+              <div className="stat-card-row">
+                <p className="stat-value">{c.value}</p>
+                <span className="stat-icon-box" style={{ background: c.bg, color: c.fg }}>{c.icon}</span>
+              </div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
 
