@@ -1,7 +1,8 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { hashPassword } from '../lib/auth';
 import { prisma } from '../lib/db';
-import { requireAdmin } from '../middleware/requireAdmin';
+import { requireAuth, requireRole } from '../middleware/requireAdmin';
 
 const router = Router();
 
@@ -37,11 +38,18 @@ function isValidEmail(email: string): boolean {
   return true;
 }
 
-// All user-management endpoints require an ADMIN session.
-router.use(requireAdmin);
+// Every endpoint requires a valid session. Mutating routes additionally
+// restrict to ADMIN via requireRole('ADMIN') below.
+router.use(requireAuth);
 
-router.get('/', async (_req, res) => {
+// Admins browse every user; Creators and Managers may browse the available
+// Learner/Viewer accounts only (e.g. to pick a learner for a request).
+router.get('/', requireRole('ADMIN', 'CREATOR', 'MANAGER'), async (req, res) => {
+  const session = req.session!;
+  const where: Prisma.UserWhereInput = session.role === 'ADMIN' ? {} : { role: 'VIEWER' };
+
   const usersRaw = await prisma.user.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -69,7 +77,7 @@ router.get('/', async (_req, res) => {
   return res.json({ users });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireRole('ADMIN'), async (req, res) => {
   const { fullName, email, password, role, contactNumber, address } = req.body ?? {};
 
   if (!fullName || !email || !role) {
@@ -128,7 +136,7 @@ router.post('/', async (req, res) => {
   return res.status(201).json({ message: 'User created successfully.' });
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRole('ADMIN'), async (req, res) => {
   const userId = Number(req.params.id);
   const { status, role, fullName, contactNumber, address } = req.body ?? {};
 
@@ -178,7 +186,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Soft-disable: keeps the record but blocks access by flipping status.
-router.patch('/:id/disable', async (req, res) => {
+router.patch('/:id/disable', requireRole('ADMIN'), async (req, res) => {
   const userId = Number(req.params.id);
   await prisma.user.update({
     where: { id: userId },
@@ -189,7 +197,7 @@ router.patch('/:id/disable', async (req, res) => {
 
 // Permanent delete: removes the user record entirely. Fails gracefully if the
 // user is still referenced by textbook requests/history (foreign keys).
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireRole('ADMIN'), async (req, res) => {
   const userId = Number(req.params.id);
   try {
     await prisma.user.delete({ where: { id: userId } });

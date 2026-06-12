@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { useSession } from '@/lib/session';
 
 type User = {
   id: number;
@@ -55,6 +56,11 @@ type EditForm = {
 };
 
 export default function UserDirectory() {
+  const { session } = useSession();
+  // Only admins manage accounts here. Creators/Managers get a read-only
+  // directory of learners (the backend already scopes the list to VIEWERs).
+  const isAdmin = session?.role === 'ADMIN';
+
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -238,17 +244,19 @@ export default function UserDirectory() {
                 </div>
               </dl>
 
-              <div className="user-card-actions">
-                <button className="btn sm secondary" type="button" onClick={() => openEdit(user)}>
-                  Edit
-                </button>
-                <button className="btn sm ghost" type="button" onClick={() => handleDisable(user.id)}>
-                  Disable
-                </button>
-                <button className="btn sm danger" type="button" onClick={() => setDeleteTarget(user)}>
-                  Delete
-                </button>
-              </div>
+              {isAdmin ? (
+                <div className="user-card-actions">
+                  <button className="btn sm secondary" type="button" onClick={() => openEdit(user)}>
+                    Edit
+                  </button>
+                  <button className="btn sm ghost" type="button" onClick={() => handleDisable(user.id)}>
+                    Disable
+                  </button>
+                  <button className="btn sm danger" type="button" onClick={() => setDeleteTarget(user)}>
+                    Delete
+                  </button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

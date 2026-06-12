@@ -37,16 +37,15 @@ function serializeRequest(r: RequestWithRelations) {
 }
 
 // Restricts which requests a session may see, mirroring the permission matrix:
-// ADMIN/MANAGER see everything, CREATOR sees what they created, VIEWER (learner)
-// sees only requests assigned to them. Returned as a filter that is always
-// AND-ed into queries so it cannot be bypassed by client-supplied filters.
+// ADMIN/MANAGER/CREATOR see every ongoing request, while VIEWER (learner) sees
+// only requests assigned to them. Returned as a filter that is always AND-ed
+// into queries so it cannot be bypassed by client-supplied filters.
 function accessFilter(session: SessionPayload): Prisma.TextbookRequestWhereInput {
   switch (session.role) {
     case 'ADMIN':
     case 'MANAGER':
-      return {};
     case 'CREATOR':
-      return { creatorId: BigInt(session.userId) };
+      return {};
     default:
       // VIEWER / Learner
       return { learnerId: BigInt(session.userId) };
@@ -259,25 +258,19 @@ router.post('/', requireRole('CREATOR', 'ADMIN'), async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // PUT /api/textbook-requests/:id
-// Update request information. ADMIN may edit any request; CREATOR may edit only
-// their own. Status transitions are owned by the Workflow module and are not
-// accepted here.
+// Update request information. ADMIN, MANAGER and CREATOR may edit any request.
+// Status transitions are owned by the Workflow module and are not accepted here.
 // ---------------------------------------------------------------------------
-router.put('/:id', requireRole('CREATOR', 'ADMIN'), async (req, res) => {
-  const session = req.session!;
+router.put('/:id', requireRole('CREATOR', 'MANAGER', 'ADMIN'), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ message: 'Invalid request id.' });
 
   const existing = await prisma.textbookRequest.findFirst({
     where: { id, deletedAt: null },
-    select: { creatorId: true },
+    select: { id: true },
   });
   if (!existing) {
     return res.status(404).json({ message: 'Textbook request not found.' });
-  }
-
-  if (session.role !== 'ADMIN' && existing.creatorId !== BigInt(session.userId)) {
-    return res.status(403).json({ message: 'You can only edit requests you created.' });
   }
 
   const { learnerId: rawLearnerId, textbookId: rawTextbookId } = req.body ?? {};
@@ -323,9 +316,9 @@ router.put('/:id', requireRole('CREATOR', 'ADMIN'), async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // DELETE /api/textbook-requests/:id
-// Soft delete. Restricted to ADMIN per the permission matrix.
+// Soft delete. ADMIN and CREATOR may delete any request.
 // ---------------------------------------------------------------------------
-router.delete('/:id', requireRole('ADMIN'), async (req, res) => {
+router.delete('/:id', requireRole('CREATOR', 'ADMIN'), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ message: 'Invalid request id.' });
 

@@ -42,12 +42,15 @@ export default function TextbookRequestList() {
   const [error, setError] = useState('');
 
   const canCreate = session?.role === 'ADMIN' || session?.role === 'CREATOR';
-  const canDelete = session?.role === 'ADMIN';
 
-  function canEdit(request: RequestSummary) {
-    if (session?.role === 'ADMIN') return true;
-    return session?.role === 'CREATOR' && request.creator.id === session.userId;
-  }
+  // Admins, managers and creators may edit any request.
+  const canEdit =
+    session?.role === 'ADMIN' ||
+    session?.role === 'MANAGER' ||
+    session?.role === 'CREATOR';
+
+  // Admins and creators may delete any request.
+  const canDelete = session?.role === 'ADMIN' || session?.role === 'CREATOR';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -218,7 +221,7 @@ export default function TextbookRequestList() {
                       >
                         View
                       </Link>
-                      {canEdit(request) ? (
+                      {canEdit ? (
                         <Link
                           className="btn secondary"
                           href={`/textbooks/${request.requestId}/edit`}

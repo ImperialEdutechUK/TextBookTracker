@@ -38,7 +38,8 @@ export default function TextbookRequestDetails({ requestId }: { requestId: strin
 
   const canEdit =
     session?.role === 'ADMIN' ||
-    (session?.role === 'CREATOR' && request.creator.id === session.userId);
+    session?.role === 'MANAGER' ||
+    session?.role === 'CREATOR';
 
   return (
     <div>
