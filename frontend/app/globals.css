@@ -323,3 +323,7 @@ th, td { padding: 0.7rem 0.9rem; }
 .notif-item-title { font-size: 0.85rem; font-weight: 600; color: var(--text); }
 .notif-item-meta { font-size: 0.78rem; color: var(--text-muted); }
 .notif-item-time { font-size: 0.72rem; color: #9ca3af; }
+
+.table-wrapper table td { white-space: nowrap; }
+.table-wrapper table td:first-child { white-space: normal; }
+.table-wrapper table td:nth-child(3) { white-space: normal; }
