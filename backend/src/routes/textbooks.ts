@@ -159,3 +159,29 @@ router.get('/:id/file', async (req, res) => {
 });
 
 export default router;
+
+router.delete('/:id', requireRole('ADMIN', 'CREATOR', 'MANAGER'), async (req, res) => {
+  let id: bigint;
+  try {
+    id = BigInt(req.params.id);
+  } catch {
+    return res.status(400).json({ message: 'Invalid textbook id.' });
+  }
+
+  const textbook = await prisma.textbook.findUnique({
+    where: { id },
+    select: { fileName: true },
+  });
+
+  if (!textbook) {
+    return res.status(404).json({ message: 'Textbook not found.' });
+  }
+
+  if (textbook.fileName) {
+    const filePath = path.join(UPLOAD_DIR, textbook.fileName);
+    fs.promises.unlink(filePath).catch(() => {});
+  }
+
+  await prisma.textbook.delete({ where: { id } });
+  return res.json({ message: 'Textbook deleted successfully.' });
+});

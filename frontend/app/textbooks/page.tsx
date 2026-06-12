@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CatalogTextbook, fetchTextbooks, fetchTextbookFile } from '@/lib/textbooks';
+import { apiFetch } from '@/lib/api';
 
 function formatSize(bytes: number | null) {
   if (!bytes && bytes !== 0) return '';
@@ -20,14 +21,15 @@ export default function TextbooksPage() {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  async function load() {
+    setLoading(true);
     fetchTextbooks()
-      .then((data) => { if (active) { setItems(data); setError(''); } })
-      .catch((err) => { if (active) setError(err instanceof Error ? err.message : 'Unable to load textbooks.'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
+      .then((data) => { setItems(data); setError(''); })
+      .catch((err) => { setError(err instanceof Error ? err.message : 'Unable to load textbooks.'); })
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -80,6 +82,25 @@ export default function TextbooksPage() {
     }
   }
 
+  async function handleDelete(t: CatalogTextbook) {
+    if (!window.confirm(`Delete "${t.textbookName}"? This cannot be undone.`)) return;
+    setBusyId(t.id);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/textbooks/${t.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json();
+        setError(d.message ?? 'Failed to delete textbook.');
+      } else {
+        await load();
+      }
+    } catch {
+      setError('Failed to delete. Check that the backend is running.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <main className="main-shell">
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
@@ -92,14 +113,8 @@ export default function TextbooksPage() {
 
       <div className="card">
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-          <input
-            className="input"
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search textbooks..."
-            style={{ marginTop: 0, flex: '1 1 280px', maxWidth: '420px' }}
-          />
+          <input className="input" type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search textbooks..." style={{ marginTop: 0, flex: '1 1 280px', maxWidth: '420px' }} />
         </div>
 
         {error ? <div className="alert">{error}</div> : null}
@@ -147,6 +162,10 @@ export default function TextbooksPage() {
                           ) : (
                             <span className="catalog-muted" style={{ fontSize: '0.8rem' }}>No PDF</span>
                           )}
+                          <button type="button" className="btn outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fecaca' }}
+                            onClick={() => handleDelete(t)} disabled={busyId === t.id}>
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -164,8 +183,7 @@ export default function TextbooksPage() {
                   <button className="btn outline" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
                     disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map((p) => (
-                    <button key={p}
-                      className={p === page ? 'btn' : 'btn outline'}
+                    <button key={p} className={p === page ? 'btn' : 'btn outline'}
                       style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', minWidth: '32px' }}
                       onClick={() => setPage(p)}>{p}</button>
                   ))}
