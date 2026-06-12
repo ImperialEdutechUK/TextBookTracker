@@ -43,7 +43,6 @@ export default function TextbooksPage() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
   useEffect(() => { setPage(1); }, [search]);
 
   async function handleView(t: CatalogTextbook) {
@@ -58,9 +57,7 @@ export default function TextbooksPage() {
     } catch (err) {
       if (win) win.close();
       setError(err instanceof Error ? err.message : 'Unable to open the PDF.');
-    } finally {
-      setBusyId(null);
-    }
+    } finally { setBusyId(null); }
   }
 
   async function handleDownload(t: CatalogTextbook) {
@@ -77,9 +74,7 @@ export default function TextbooksPage() {
       setTimeout(() => { anchor.remove(); URL.revokeObjectURL(url); }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to download the PDF.');
-    } finally {
-      setBusyId(null);
-    }
+    } finally { setBusyId(null); }
   }
 
   async function handleDelete(t: CatalogTextbook) {
@@ -96,9 +91,7 @@ export default function TextbooksPage() {
       }
     } catch {
       setError('Failed to delete. Check that the backend is running.');
-    } finally {
-      setBusyId(null);
-    }
+    } finally { setBusyId(null); }
   }
 
   return (
@@ -112,9 +105,10 @@ export default function TextbooksPage() {
       </div>
 
       <div className="card">
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+        <div style={{ marginBottom: '0.75rem' }}>
           <input className="input" type="search" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search textbooks..." style={{ marginTop: 0, flex: '1 1 280px', maxWidth: '420px' }} />
+            placeholder="Search by title, author or subject..."
+            style={{ marginTop: 0, maxWidth: '420px' }} />
         </div>
 
         {error ? <div className="alert">{error}</div> : null}
@@ -131,12 +125,12 @@ export default function TextbooksPage() {
                     <th>Author</th>
                     <th>Subject</th>
                     <th>File</th>
-                    <th>Actions</th>
+                    <th style={{ width: '180px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageItems.length === 0 && (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#6b7280' }}>
+                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>
                       {items.length === 0 ? 'No textbooks have been added yet.' : 'No textbooks match your search.'}
                     </td></tr>
                   )}
@@ -145,24 +139,33 @@ export default function TextbooksPage() {
                       <td style={{ fontWeight: 500 }}>{t.textbookName}</td>
                       <td style={{ color: '#6b7280' }}>{t.author || '—'}</td>
                       <td style={{ color: '#6b7280' }}>{t.subject || '—'}</td>
-                      <td style={{ color: '#6b7280' }}>{t.hasFile ? formatSize(t.fileSize) || 'PDF' : <span style={{ color: '#9ca3af' }}>No file</span>}</td>
+                      <td style={{ color: '#6b7280' }}>
+                        {t.hasFile ? (
+                          <span style={{ background: '#dcfce7', color: '#166534', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600 }}>
+                            {formatSize(t.fileSize) || 'PDF'}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>No file</span>
+                        )}
+                      </td>
                       <td>
-                        <div className="row-actions">
-                          {t.hasFile ? (
+                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                          {t.hasFile && (
                             <>
-                              <button type="button" className="btn outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                              <button type="button" className="btn outline"
+                                style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}
                                 onClick={() => handleView(t)} disabled={busyId === t.id}>
-                                {busyId === t.id ? 'Opening...' : 'View'}
+                                View
                               </button>
-                              <button type="button" className="btn outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                              <button type="button" className="btn outline"
+                                style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}
                                 onClick={() => handleDownload(t)} disabled={busyId === t.id}>
                                 Download
                               </button>
                             </>
-                          ) : (
-                            <span className="catalog-muted" style={{ fontSize: '0.8rem' }}>No PDF</span>
                           )}
-                          <button type="button" className="btn outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fecaca' }}
+                          <button type="button" className="btn outline"
+                            style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem', color: '#dc2626', borderColor: '#fecaca' }}
                             onClick={() => handleDelete(t)} disabled={busyId === t.id}>
                             Delete
                           </button>
