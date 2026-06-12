@@ -95,3 +95,4 @@ Frontend environment variables (`frontend/.env.local`):
   `localhost`, which the browser treats as same-site (so `SameSite=Lax` works).
   For a cross-domain production deploy, set `CROSS_SITE_COOKIES=true` and serve
   both over HTTPS.
+
