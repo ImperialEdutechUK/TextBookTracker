@@ -8,19 +8,17 @@ import { requireAuth, requireRole } from '../middleware/requireAdmin';
 
 const router = Router();
 
+// Legacy on-disk location. New uploads are stored in the database (see below),
+// but we still read from here as a fallback so files uploaded before this change
+// (and local-dev files) keep working.
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'textbooks');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const unique = crypto.randomBytes(16).toString('hex');
-    cb(null, `${unique}${path.extname(file.originalname).toLowerCase()}`);
-  },
-});
-
+// Keep the bytes in memory so we can persist them to the database. Hosts like
+// Railway have an ephemeral filesystem, so anything written to local disk is
+// lost on the next redeploy/restart — the DB is the only durable store.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -77,28 +75,27 @@ router.post(
       const subject = (req.body?.subject ?? '').trim() || null;
       const file = req.file;
 
-      const fail = (status: number, message: string) => {
-        if (file) fs.promises.unlink(file.path).catch(() => {});
-        return res.status(status).json({ message });
-      };
-
       if (!textbookName) {
-        return fail(400, 'Textbook name is required.');
+        return res.status(400).json({ message: 'Textbook name is required.' });
       }
       if (!file) {
         return res.status(400).json({ message: 'A PDF file is required.' });
       }
 
       try {
+        // fileName is kept as a lightweight "has a file" flag/identifier; the
+        // actual bytes live in fileData so they persist across redeploys.
+        const fileName = `${crypto.randomBytes(16).toString('hex')}.pdf`;
         const textbook = await prisma.textbook.create({
           data: {
             textbookName,
             author,
             subject,
-            fileName: file.filename,
+            fileName,
             originalName: file.originalname,
             fileSize: BigInt(file.size),
             mimeType: file.mimetype,
+            fileData: file.buffer,
           },
           select: { id: true, textbookName: true, author: true, subject: true, createdAt: true },
         });
@@ -113,7 +110,7 @@ router.post(
           },
         });
       } catch {
-        return fail(500, 'Could not save the textbook.');
+        return res.status(500).json({ message: 'Could not save the textbook.' });
       }
     });
   }
@@ -129,16 +126,11 @@ router.get('/:id/file', async (req, res) => {
 
   const textbook = await prisma.textbook.findUnique({
     where: { id },
-    select: { fileName: true, originalName: true, mimeType: true },
+    select: { fileName: true, originalName: true, mimeType: true, fileData: true },
   });
 
-  if (!textbook?.fileName) {
+  if (!textbook || (!textbook.fileData && !textbook.fileName)) {
     return res.status(404).json({ message: 'No file found for this textbook.' });
-  }
-
-  const filePath = path.join(UPLOAD_DIR, textbook.fileName);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ message: 'File is missing from storage.' });
   }
 
   const disposition = req.query.download ? 'attachment' : 'inline';
@@ -147,6 +139,19 @@ router.get('/:id/file', async (req, res) => {
     'Content-Disposition',
     `${disposition}; filename="${encodeURIComponent(textbook.originalName ?? 'textbook.pdf')}"`
   );
+
+  // Preferred path: bytes stored in the database (durable across redeploys).
+  if (textbook.fileData) {
+    const buffer = Buffer.from(textbook.fileData);
+    res.setHeader('Content-Length', String(buffer.length));
+    return res.end(buffer);
+  }
+
+  // Fallback for legacy/local uploads still on disk.
+  const filePath = path.join(UPLOAD_DIR, textbook.fileName as string);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ message: 'File is missing from storage.' });
+  }
   return res.sendFile(filePath);
 });
 

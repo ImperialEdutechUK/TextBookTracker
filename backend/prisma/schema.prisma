@@ -50,6 +50,7 @@ model Textbook {
   originalName String?  @map("original_name")
   fileSize     BigInt?  @map("file_size")
   mimeType     String?  @map("mime_type")
+  fileData     Bytes?   @map("file_data")
   createdAt    DateTime @default(now()) @map("created_at")
   requests TextbookRequest[]
   @@map("textbooks")
