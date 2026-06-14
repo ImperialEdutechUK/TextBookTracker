@@ -1,4 +1,4 @@
-import AddTextbookSection from '@/components/AddTextbookSection';
+import AddTextbookForm from '@/components/AddTextbookForm';
 
 export default function AddTextbookPage() {
   return (
@@ -13,7 +13,7 @@ export default function AddTextbookPage() {
             </p>
           </div>
         </div>
-        <AddTextbookSection />
+        <AddTextbookForm />
       </div>
     </main>
   );

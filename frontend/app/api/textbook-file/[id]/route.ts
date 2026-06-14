@@ -8,7 +8,7 @@ import { NextRequest } from 'next/server';
 //  2. Buffered (not streamed): a streamed/chunked binary response to the browser
 //     was being reset (ERR_CONNECTION_RESET) on some local setups; reading the
 //     bytes fully and sending one response with Content-Length is reliable.
-// Textbook PDFs are capped at 25 MB on upload, so buffering is fine.
+// The whole PDF is buffered server-side before being returned.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export const dynamic = 'force-dynamic';

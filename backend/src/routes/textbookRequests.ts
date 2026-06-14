@@ -59,7 +59,7 @@ function parseId(value: unknown): bigint | null {
 router.get('/options', async (_req, res) => {
   const [learnersRaw, textbooksRaw] = await Promise.all([
     prisma.user.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', role: 'VIEWER' },
       orderBy: { fullName: 'asc' },
       select: { id: true, fullName: true },
     }),
@@ -197,6 +197,53 @@ router.get('/export/csv', async (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="textbook-requests.csv"');
   return res.send(lines.join('\n'));
+});
+
+// Books that have reached PRINTED status are physically in the print shop.
+// We dedupe by textbook (not request) because the point is to know a given book
+// is already printed so it isn't sent for printing again. Visible to any
+// authenticated user — being "in the print shop" is a shop-wide fact.
+router.get('/print-shop', async (req, res) => {
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const filters: Prisma.TextbookRequestWhereInput[] = [
+    { deletedAt: null },
+    { currentStatus: 'PRINTED' },
+  ];
+  if (search) {
+    filters.push({ textbook: { textbookName: { contains: search, mode: 'insensitive' } } });
+  }
+
+  const rows = await prisma.textbookRequest.findMany({
+    where: { AND: filters },
+    orderBy: { updatedAt: 'desc' },
+    include: {
+      textbook: { select: { id: true, textbookName: true, author: true, subject: true } },
+    },
+  });
+
+  // First row per textbook is the most recently printed (rows are sorted desc).
+  const byBook = new Map<
+    string,
+    { textbookId: string; textbookName: string; author: string | null; subject: string | null; printedAt: string; printedCount: number }
+  >();
+  for (const r of rows) {
+    const key = r.textbookId.toString();
+    const existing = byBook.get(key);
+    if (existing) {
+      existing.printedCount += 1;
+    } else {
+      byBook.set(key, {
+        textbookId: key,
+        textbookName: r.textbook.textbookName,
+        author: r.textbook.author,
+        subject: r.textbook.subject,
+        printedAt: r.updatedAt.toISOString(),
+        printedCount: 1,
+      });
+    }
+  }
+
+  return res.json({ books: Array.from(byBook.values()) });
 });
 
 router.get('/:id', async (req, res) => {

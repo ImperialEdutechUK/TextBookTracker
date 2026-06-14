@@ -11,8 +11,6 @@ const router = Router();
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'textbooks');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
-
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
   filename: (_req, file, cb) => {
@@ -23,7 +21,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -71,12 +68,7 @@ router.post(
   (req, res) => {
     upload.single('pdf')(req, res, async (err: unknown) => {
       if (err) {
-        const message =
-          err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE'
-            ? 'The PDF is too large (max 25 MB).'
-            : err instanceof Error
-            ? err.message
-            : 'Upload failed.';
+        const message = err instanceof Error ? err.message : 'Upload failed.';
         return res.status(400).json({ message });
       }
 

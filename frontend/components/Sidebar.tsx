@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: 'Requests',        href: '/requests', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
   { label: 'Learners',        href: '/learners',     icon: 'M22 10v6M2 10l10-5 10 5-10 5z M6 12v5c3 3 9 3 12 0v-5' },
   { label: 'Status Tracking', href: '/status',       icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
+  { label: 'Print Shop',      href: '/print-shop',   icon: 'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z' },
   { label: 'Users',           href: '/admin/users',  icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
 ];
 
