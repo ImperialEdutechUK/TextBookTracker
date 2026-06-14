@@ -40,6 +40,8 @@ export default function UserManager() {
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function loadUsers() {
     setLoading(true);
@@ -114,8 +116,32 @@ export default function UserManager() {
 
   async function handleDisable(id: number) {
     if (!window.confirm('Disable this user account?')) return;
-    await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'INACTIVE' }),
+    });
     await loadUsers();
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError('');
+    try {
+      const response = await apiFetch(`/api/users/${deleteTarget.id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data?.message || 'Could not delete user.');
+        return;
+      }
+      setDeleteTarget(null);
+      await loadUsers();
+    } catch {
+      setError('Could not delete user. Check that the backend is running.');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -233,8 +259,10 @@ export default function UserManager() {
                       <div className="row-actions">
                         <button className="btn outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
                           onClick={() => { setEditId(user.id); setEditRole(user.role); setEditStatus(user.status); }}>Edit</button>
-                        <button className="btn outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fecaca' }}
+                        <button className="btn outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
                           onClick={() => handleDisable(user.id)}>Disable</button>
+                        <button className="btn outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fecaca' }}
+                          onClick={() => { setDeleteTarget(user); setError(''); }}>Delete</button>
                       </div>
                     </td>
                   </tr>
@@ -244,6 +272,46 @@ export default function UserManager() {
           </div>
         )}
       </div>
+
+      {deleteTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => { if (!deleting) setDeleteTarget(null); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: '14px', padding: '1.5rem', maxWidth: '420px', width: '100%', boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}
+          >
+            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>Delete user</h3>
+            <p style={{ margin: '0.75rem 0 1rem', color: '#374151' }}>
+              Sure want to delete user <strong>{deleteTarget.fullName}</strong>
+            </p>
+            {error && <div className="alert" style={{ marginBottom: '1rem' }}>{error}</div>}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn"
+                style={{ background: '#16a34a' }}
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Yes'}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{ background: '#dc2626' }}
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

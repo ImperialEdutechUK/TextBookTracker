@@ -89,9 +89,38 @@ router.put('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  const userId = BigInt(req.params.id);
-  await prisma.user.update({ where: { id: userId }, data: { status: 'INACTIVE' } });
-  return res.json({ message: 'User disabled successfully.' });
+  let userId: bigint;
+  try {
+    userId = BigInt(req.params.id);
+  } catch {
+    return res.status(400).json({ message: 'Invalid user id.' });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!existing) return res.status(404).json({ message: 'User not found.' });
+
+  // The user can't be hard-deleted while referenced by textbook requests or
+  // status history (those FKs are RESTRICT), so deleting would orphan/break
+  // that data. Block it with a clear message instead of a DB error.
+  const [linkedRequests, linkedHistory] = await Promise.all([
+    prisma.textbookRequest.count({ where: { OR: [{ creatorId: userId }, { learnerId: userId }] } }),
+    prisma.textbookStatusHistory.count({ where: { changedBy: userId } }),
+  ]);
+  if (linkedRequests > 0 || linkedHistory > 0) {
+    return res.status(409).json({
+      message: 'This user has linked textbook requests or history and cannot be deleted. Disable the account instead.',
+    });
+  }
+
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+    return res.json({ message: 'User deleted successfully.' });
+  } catch (err: any) {
+    if (err?.code === 'P2025') {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    return res.status(500).json({ message: 'Could not delete user.' });
+  }
 });
 
 export default router;
