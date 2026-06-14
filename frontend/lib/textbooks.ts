@@ -97,7 +97,11 @@ export async function fetchTextbooks(): Promise<CatalogTextbook[]> {
 }
 
 export async function fetchTextbookFile(id: string): Promise<Blob> {
-  const res = await fetch(`/api/textbook-file/${id}`, { credentials: 'include' });
+  // Hit the backend directly (with credentials) like every other authenticated
+  // call. A same-origin Next proxy can't work cross-domain: the auth cookie
+  // lives on the backend's domain, so it wouldn't be sent to the frontend's
+  // origin and the proxied request would be rejected with 401.
+  const res = await apiFetch(`/api/textbooks/${id}/file`);
   if (!res.ok) throw new Error(await readError(res, 'Unable to load the PDF.'));
   return res.blob();
 }
