@@ -11,7 +11,9 @@ type User = {
   createdAt: string;
 };
 
-const roles = ['ADMIN', 'CREATOR', 'MANAGER', 'VIEWER'];
+// Learners (VIEWER) are managed in the Learners tab, so this view only deals
+// with staff roles.
+const roles = ['ADMIN', 'CREATOR', 'MANAGER'];
 const statuses = ['ACTIVE', 'INACTIVE', 'SUSPENDED'];
 
 function statusClass(status: string) {
@@ -55,9 +57,11 @@ export default function UserManager() {
   useEffect(() => { loadUsers(); }, []);
 
   const filtered = useMemo(() => {
+    // Only show staff roles here; learners (VIEWER) live in the Learners tab.
+    const staff = users.filter((u) => u.role !== 'VIEWER');
     const term = search.trim().toLowerCase();
-    if (!term) return users;
-    return users.filter((u) =>
+    if (!term) return staff;
+    return staff.filter((u) =>
       u.fullName.toLowerCase().includes(term) ||
       u.email.toLowerCase().includes(term) ||
       u.role.toLowerCase().includes(term)
@@ -130,7 +134,7 @@ export default function UserManager() {
         <div className="card" style={{ marginBottom: '1.5rem' }}>
           <h2 className="section-title" style={{ marginBottom: '1rem' }}>Create New User</h2>
           {error && <div className="alert" style={{ marginBottom: '1rem' }}>{error}</div>}
-          <form onSubmit={handleCreate}>
+          <form onSubmit={handleCreate} autoComplete="off">
             <div className="form-grid two-cols">
               <div>
                 <label className="field-label">Full Name *</label>
@@ -139,12 +143,12 @@ export default function UserManager() {
               </div>
               <div>
                 <label className="field-label">Email Address *</label>
-                <input className="input" type="email" required value={form.email}
+                <input className="input" type="email" autoComplete="off" required value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="e.g. jane@example.com" />
               </div>
               <div>
                 <label className="field-label">Password *</label>
-                <input className="input" type="password" required value={form.password}
+                <input className="input" type="password" autoComplete="new-password" required value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Set a password" />
               </div>
               <div>

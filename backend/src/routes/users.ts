@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { hashPassword } from '../lib/auth';
 import { prisma } from '../lib/db';
 import { requireAdmin } from '../middleware/requireAdmin';
@@ -38,12 +39,15 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const { fullName, email, password, role, contactNumber, course, units, address } = req.body ?? {};
-  if (!fullName || !email || !password || !role) {
-    return res.status(400).json({ message: 'Full name, email, password and role are required.' });
+  if (!fullName || !email || !role) {
+    return res.status(400).json({ message: 'Full name, email and role are required.' });
   }
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return res.status(409).json({ message: 'Email already exists.' });
-  const passwordHash = await hashPassword(password);
+  // Learners don't sign in, so a password is optional. Generate a random one
+  // when none is supplied to satisfy the non-null passwordHash column.
+  const rawPassword = password || crypto.randomBytes(24).toString('hex');
+  const passwordHash = await hashPassword(rawPassword);
   await prisma.user.create({
     data: {
       fullName, email, passwordHash, role, status: 'ACTIVE',

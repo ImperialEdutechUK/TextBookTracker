@@ -9,7 +9,7 @@ type Learner = {
   units: string | null; address: string | null;
 };
 
-const emptyForm = { fullName: '', email: '', password: '', contactNumber: '', course: '', units: '', address: '' };
+const emptyForm = { fullName: '', email: '', contactNumber: '', course: '', units: '', address: '' };
 
 export default function LearnersPage() {
   const router = useRouter();
@@ -103,11 +103,10 @@ export default function LearnersPage() {
         <div className="card" style={{ marginBottom: '1.5rem' }}>
           <h2 className="section-title" style={{ marginBottom: '1rem' }}>New Learner</h2>
           {error && <div className="alert">{error}</div>}
-          <form onSubmit={handleAdd}>
+          <form onSubmit={handleAdd} autoComplete="off">
             <div className="form-grid two-cols" style={{ marginTop: '1rem' }}>
               <div><label className="field-label">Full Name *</label><input className="input" required value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} placeholder="e.g. Ket Lau" /></div>
-              <div><label className="field-label">Email *</label><input className="input" type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="e.g. meena@yahoo.com" /></div>
-              <div><label className="field-label">Password *</label><input className="input" type="password" required value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Set a password" /></div>
+              <div><label className="field-label">Email *</label><input className="input" type="email" autoComplete="off" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="e.g. meena@yahoo.com" /></div>
               <div><label className="field-label">Contact Number</label><input className="input" value={form.contactNumber} onChange={e => setForm({ ...form, contactNumber: e.target.value })} placeholder="e.g. 0567490236" /></div>
               <div><label className="field-label">Course</label><input className="input" value={form.course} onChange={e => setForm({ ...form, course: e.target.value })} placeholder="e.g. ATHE Level 3 Diploma in Health and Social Care" /></div>
               <div><label className="field-label">Units</label><input className="input" value={form.units} onChange={e => setForm({ ...form, units: e.target.value })} placeholder="e.g. All (06 units available)" /></div>

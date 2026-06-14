@@ -4,8 +4,6 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createTextbook } from '@/lib/textbooks';
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
-
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -29,10 +27,6 @@ export default function AddTextbookForm({ onAdded }: { onAdded?: () => void }) {
     if (!candidate) return;
     if (candidate.type !== 'application/pdf') {
       setError('Only PDF files are allowed.');
-      return;
-    }
-    if (candidate.size > MAX_FILE_SIZE) {
-      setError('The PDF is too large (max 25 MB).');
       return;
     }
     setFile(candidate);
@@ -163,7 +157,7 @@ export default function AddTextbookForm({ onAdded }: { onAdded?: () => void }) {
             <div className="dropzone-prompt">
               <strong>Drag &amp; drop</strong> a PDF here, or{' '}
               <span className="dropzone-browse">browse</span>
-              <small>PDF only, up to 25 MB</small>
+              <small>PDF only</small>
             </div>
           )}
         </div>

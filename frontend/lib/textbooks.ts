@@ -130,6 +130,23 @@ export async function createTextbook(input: NewTextbookInput): Promise<CreatedTe
   return data.textbook as CreatedTextbook;
 }
 
+export type PrintShopBook = {
+  textbookId: string;
+  textbookName: string;
+  author: string | null;
+  subject: string | null;
+  printedAt: string;
+  printedCount: number;
+};
+
+export async function fetchPrintShopBooks(search?: string): Promise<PrintShopBook[]> {
+  const suffix = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  const res = await apiFetch(`/api/textbook-requests/print-shop${suffix}`);
+  if (!res.ok) throw new Error(await readError(res, 'Unable to load print shop books.'));
+  const data = await res.json();
+  return data.books as PrintShopBook[];
+}
+
 export async function fetchFormOptions(): Promise<FormOptions> {
   const res = await apiFetch('/api/textbook-requests/options');
   if (!res.ok) throw new Error(await readError(res, 'Unable to load form options.'));
