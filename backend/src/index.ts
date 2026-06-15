@@ -15,6 +15,12 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 const allowedOrigins = [FRONTEND_URL, 'http://localhost:3000', 'http://localhost:3001'];
 
+// Railway (and most PaaS) terminate TLS at a proxy and forward over http.
+// Trust the proxy so `req.secure` / `req.protocol` reflect the original HTTPS
+// connection, which the auth route uses to decide on Secure/SameSite=None
+// cookies. Harmless locally where there is no forwarding proxy.
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Request, Router } from 'express';
 import {
   comparePasswords,
   createSessionToken,
@@ -10,15 +10,25 @@ import { getSession } from '../middleware/requireAdmin';
 const router = Router();
 const COOKIE_NAME = getAuthCookieName();
 
-// Cross-site cookies require SameSite=None + Secure. For local same-site dev
-// (frontend and backend both on localhost) SameSite=Lax works over http.
-const crossSite = process.env.CROSS_SITE_COOKIES === 'true';
-const cookieOptions = {
-  httpOnly: true,
-  path: '/',
-  sameSite: (crossSite ? 'none' : 'lax') as 'none' | 'lax',
-  secure: crossSite || process.env.NODE_ENV === 'production',
-};
+// The deployed frontend and backend live on different domains, so production
+// requests are cross-site. A cross-site cookie must be SameSite=None + Secure,
+// otherwise the browser will refuse to send it on the frontend's fetch() calls
+// (which is what caused /api/auth/me to 401 for shared users).
+//
+// We decide per request from whether the connection is HTTPS (req.secure,
+// reliable behind Railway's proxy thanks to `trust proxy`) rather than from
+// NODE_ENV, since Railway does not always set NODE_ENV=production. Secure
+// cookies cannot be set over plain http, so local http dev falls back to
+// SameSite=Lax. CROSS_SITE_COOKIES=true can force cross-site mode on.
+function cookieOptionsFor(req: Request) {
+  const crossSite = process.env.CROSS_SITE_COOKIES === 'true' || req.secure;
+  return {
+    httpOnly: true,
+    path: '/',
+    sameSite: (crossSite ? 'none' : 'lax') as 'none' | 'lax',
+    secure: crossSite,
+  };
+}
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body ?? {};
@@ -47,12 +57,12 @@ router.post('/login', async (req, res) => {
     status: user.status,
   });
 
-  res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 60 * 60 * 24 * 1000 });
+  res.cookie(COOKIE_NAME, token, { ...cookieOptionsFor(req), maxAge: 60 * 60 * 24 * 1000 });
   return res.json({ message: 'Authenticated successfully', role: user.role });
 });
 
-router.post('/logout', (_req, res) => {
-  res.clearCookie(COOKIE_NAME, cookieOptions);
+router.post('/logout', (req, res) => {
+  res.clearCookie(COOKIE_NAME, cookieOptionsFor(req));
   return res.json({ message: 'Logged out successfully.' });
 });
 
