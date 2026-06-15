@@ -11,8 +11,21 @@ declare global {
   }
 }
 
+// Resolve the session token from either the auth cookie or an
+// `Authorization: Bearer <token>` header. The header path is what makes auth
+// work cross-domain (e.g. frontend on Vercel, API on Railway): browsers block
+// the cross-site cookie as a third-party cookie (always in incognito/Safari),
+// so the frontend also stores the JWT and sends it explicitly as a header.
+function getToken(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) {
+    return header.slice('Bearer '.length).trim();
+  }
+  return req.cookies?.[getAuthCookieName()] ?? null;
+}
+
 export function getSession(req: Request): SessionPayload | null {
-  const token = req.cookies?.[getAuthCookieName()];
+  const token = getToken(req);
   if (!token) return null;
   try {
     return verifySessionToken(token);

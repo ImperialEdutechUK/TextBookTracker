@@ -29,7 +29,10 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
+        // Reject cleanly (no CORS headers) rather than throwing, which would
+        // surface as a confusing 500 instead of a normal blocked request.
+        console.warn(`Blocked CORS origin: ${origin}`);
+        callback(null, false);
       }
     },
     credentials: true,

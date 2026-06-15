@@ -6,7 +6,31 @@ export function apiUrl(path: string) {
   return `${API_BASE}${path}`;
 }
 
-// Wrapper around fetch that always sends the auth cookie to the backend.
+// The frontend and backend live on different domains in production, so the auth
+// cookie is a third-party cookie that browsers block (always in incognito and
+// Safari, increasingly everywhere). To make login reliable for everyone we also
+// keep the JWT in localStorage and send it as an Authorization header. The
+// cookie is still sent (credentials: 'include') for same-site/dev setups.
+const TOKEN_KEY = 'textbook_tracker_token';
+
+export function setToken(token: string) {
+  if (typeof window !== 'undefined') window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function clearToken() {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(TOKEN_KEY);
+}
+
+// Wrapper around fetch that authenticates the request to the backend, via both
+// the auth cookie and an Authorization header when a token is stored.
 export function apiFetch(path: string, init: RequestInit = {}) {
-  return fetch(apiUrl(path), { credentials: 'include', ...init });
+  const token = getToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(apiUrl(path), { credentials: 'include', ...init, headers });
 }
