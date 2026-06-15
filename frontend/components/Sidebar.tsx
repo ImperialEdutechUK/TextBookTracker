@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, clearToken } from '@/lib/api';
 
 const NAV_ITEMS = [
   { label: 'Dashboard',       href: '/dashboard',    icon: 'M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z' },
@@ -31,6 +31,7 @@ export default function Sidebar() {
 
   async function handleLogout() {
     await apiFetch('/api/auth/logout', { method: 'POST' });
+    clearToken();
     router.replace('/login');
   }
 

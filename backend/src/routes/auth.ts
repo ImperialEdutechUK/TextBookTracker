@@ -57,8 +57,12 @@ router.post('/login', async (req, res) => {
     status: user.status,
   });
 
+  // Set the cookie (works for same-site setups) AND return the token in the
+  // body so the frontend can send it as an Authorization header. The header is
+  // what keeps auth working cross-domain, where the cookie is blocked as a
+  // third-party cookie (e.g. in incognito / Safari).
   res.cookie(COOKIE_NAME, token, { ...cookieOptionsFor(req), maxAge: 60 * 60 * 24 * 1000 });
-  return res.json({ message: 'Authenticated successfully', role: user.role });
+  return res.json({ message: 'Authenticated successfully', role: user.role, token });
 });
 
 router.post('/logout', (req, res) => {

@@ -2,7 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, setToken } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,8 +21,12 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: e, password: p }),
       });
-      if (res.ok) { router.push('/dashboard'); return; }
       const data = await res.json();
+      if (res.ok) {
+        if (data?.token) setToken(data.token);
+        router.push('/dashboard');
+        return;
+      }
       setError(data?.message || 'Unable to log in.');
     } catch {
       setError('Cannot connect to server. Please try again.');
