@@ -1,87 +1,85 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// Single manager/admin account. There are no roles — one login does everything
+// (enter the request, send to print with the tracking number, mark it printed).
 model User {
-  id                  BigInt    @id @default(autoincrement())
-  fullName            String
-  email               String    @unique
-  passwordHash        String
-  role                Role      @default(CREATOR)
-  status              Status    @default(ACTIVE)
-  contactNumber       String?   @map("contact_number")
-  course              String?
-  units               String?
-  address             String?
-  notificationsSeenAt DateTime? @map("notifications_seen_at")
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  createdRequests TextbookRequest[]       @relation("RequestCreator")
-  learnerRequests TextbookRequest[]       @relation("RequestLearner")
-  statusChanges   TextbookStatusHistory[]
+  id           BigInt   @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @default("Administrator") @map("full_name")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
 }
-enum Role {
-  ADMIN
-  CREATOR
-  MANAGER
-  VIEWER
-}
-enum Status {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-enum TextbookStatus {
-  CREATED
-  REQUESTED_BY_LEARNER
-  SHARED_WITH_MANAGER
+
+// Request lifecycle: RECEIVED -> SENT_TO_PRINT -> PRINTED. Each request can move
+// one step forward or one step back (revert).
+enum RequestStatus {
+  RECEIVED
   SENT_TO_PRINT
   PRINTED
 }
-model Textbook {
-  id           BigInt   @id @default(autoincrement()) @map("textbook_id")
-  textbookName String   @map("textbook_name")
-  author       String?
-  subject      String?
-  fileName     String?  @map("file_name")
-  originalName String?  @map("original_name")
-  fileSize     BigInt?  @map("file_size")
-  mimeType     String?  @map("mime_type")
-  fileData     Bytes?   @map("file_data")
-  createdAt    DateTime @default(now()) @map("created_at")
-  requests TextbookRequest[]
-  @@map("textbooks")
+
+// Time-stamped audit entries for a request, used to build the activity timeline
+// (request created, PDF attached, sent to print, printed, reverted).
+enum RequestEventType {
+  CREATED
+  PDF_ATTACHED
+  PDF_REMOVED
+  SENT_TO_PRINT
+  PRINTED
+  REVERTED
 }
+
+// A learner's textbook request. The learner's details are entered directly from
+// their request email, so they are stored inline on the request rather than as a
+// separate user/textbook record.
 model TextbookRequest {
-  id            BigInt         @id @default(autoincrement()) @map("request_id")
-  learnerId     BigInt         @map("learner_id")
-  textbookId    BigInt         @map("textbook_id")
-  creatorId     BigInt         @map("creator_id")
-  currentStatus TextbookStatus @default(CREATED) @map("current_status")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  deletedAt     DateTime?      @map("deleted_at")
-  learner       User                    @relation("RequestLearner", fields: [learnerId], references: [id])
-  creator       User                    @relation("RequestCreator", fields: [creatorId], references: [id])
-  textbook      Textbook                @relation(fields: [textbookId], references: [id])
-  statusHistory TextbookStatusHistory[]
-  @@index([learnerId])
-  @@index([creatorId])
-  @@index([textbookId])
-  @@index([currentStatus])
+  id             BigInt        @id @default(autoincrement()) @map("request_id")
+  fullName       String        @map("full_name")
+  email          String
+  contactNumber  String        @map("contact_number")
+  course         String
+  units          String
+  address        String
+  status         RequestStatus @default(RECEIVED)
+  trackingNumber String?       @map("tracking_number")
+
+  // Attached PDF (the printed textbook). Bytes live in the DB so they survive
+  // redeploys on hosts with an ephemeral filesystem.
+  fileName     String? @map("file_name")
+  originalName String? @map("original_name")
+  fileSize     BigInt? @map("file_size")
+  mimeType     String? @map("mime_type")
+  fileData     Bytes?  @map("file_data")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  events RequestEvent[]
+
+  @@index([status])
   @@map("textbook_requests")
 }
-model TextbookStatusHistory {
-  id        BigInt         @id @default(autoincrement()) @map("history_id")
-  requestId BigInt         @map("request_id")
-  status    TextbookStatus
-  changedBy BigInt         @map("changed_by")
-  changedAt DateTime       @default(now()) @map("changed_at")
-  request       TextbookRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  changedByUser User            @relation(fields: [changedBy], references: [id])
+
+model RequestEvent {
+  id        BigInt           @id @default(autoincrement()) @map("event_id")
+  requestId BigInt           @map("request_id")
+  type      RequestEventType
+  detail    String?
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  request TextbookRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
   @@index([requestId])
-  @@map("textbook_status_history")
+  @@map("request_events")
 }

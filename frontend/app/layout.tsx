@@ -3,8 +3,8 @@ import './globals.css';
 import AppShell from '@/components/AppShell';
 
 export const metadata: Metadata = {
-  title: 'TextBookTracker',
-  description: 'Textbook sharing and print tracking dashboard with role-based access control.',
+  title: 'Textbook Request Tracker',
+  description: 'Track learner textbook requests from received to printed, with PDF attachments and tracking numbers.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

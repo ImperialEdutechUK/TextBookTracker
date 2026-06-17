@@ -6,10 +6,8 @@ const COOKIE_NAME = 'textbook_tracker_token';
 
 export type SessionPayload = {
   userId: string;
-  email: string;
+  username: string;
   fullName: string;
-  role: string;
-  status: string;
 };
 
 export async function hashPassword(password: string) {

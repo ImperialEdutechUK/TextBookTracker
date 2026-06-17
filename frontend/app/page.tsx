@@ -55,8 +55,7 @@ export default function HomePage() {
           <a href="#contact">Contact</a>
         </nav>
         <div className="landing-actions">
-          <Link href="/login" className="landing-login">Login</Link>
-          <Link href="/login" className="btn" style={{ padding: '0.55rem 1.2rem', borderRadius: '8px' }}>Sign Up</Link>
+          <Link href="/login" className="btn" style={{ padding: '0.55rem 1.2rem', borderRadius: '8px' }}>Login</Link>
         </div>
       </header>
 
@@ -81,21 +80,21 @@ export default function HomePage() {
           <div className="landing-about-text">
             <span className="landing-tag">About Us</span>
             <h2>Built for educational institutions</h2>
-            <p>Textbook Tracker is a purpose-built platform for schools, colleges, and universities to manage their textbook inventory and streamline the request process between learners, creators, and administrators.</p>
-            <p>With role-based access for Admins, Managers, Creators, and Viewers, every stakeholder gets exactly the tools they need — nothing more, nothing less.</p>
+            <p>Textbook Request Tracker is a purpose-built tool for managing learner textbook requests from the moment they arrive to the day they are printed and delivered.</p>
+            <p>One manager account does everything — enter the request, attach the PDF, send it to print with a tracking number, and mark it printed.</p>
           </div>
           <div className="landing-about-stats">
             <div className="about-stat">
-              <span className="about-stat-value">4</span>
-              <span className="about-stat-label">User Roles</span>
-            </div>
-            <div className="about-stat">
-              <span className="about-stat-value">5</span>
+              <span className="about-stat-value">3</span>
               <span className="about-stat-label">Status Stages</span>
             </div>
             <div className="about-stat">
+              <span className="about-stat-value">1</span>
+              <span className="about-stat-label">Manager Login</span>
+            </div>
+            <div className="about-stat">
               <span className="about-stat-value">100%</span>
-              <span className="about-stat-label">Role-Based Access</span>
+              <span className="about-stat-label">Tracked &amp; Time-stamped</span>
             </div>
             <div className="about-stat">
               <span className="about-stat-value">∞</span>
@@ -139,8 +138,8 @@ export default function HomePage() {
               <div className="feature-icon">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
               </div>
-              <h3>Role-Based Access</h3>
-              <p>Admin, Manager, Creator and Viewer roles ensure the right people see the right data.</p>
+              <h3>Tracking Numbers</h3>
+              <p>Capture the print/delivery tracking number on every request — searchable and included in CSV export.</p>
             </div>
             <div className="feature-card">
               <div className="feature-icon">

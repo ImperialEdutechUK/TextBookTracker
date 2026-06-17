@@ -25,34 +25,26 @@ const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'AdminPass123!';
+  // The single manager/admin account. Override via .env (ADMIN_USERNAME /
+  // ADMIN_PASSWORD / ADMIN_FULLNAME) to set your own credentials.
+  const username = process.env.ADMIN_USERNAME || 'admin';
+  const password = process.env.ADMIN_PASSWORD || 'Admin@2026';
   const fullName = process.env.ADMIN_FULLNAME || 'Administrator';
 
-  console.log('Seeding admin user:', adminEmail);
+  console.log('Seeding admin user:', username);
 
-  const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
-  if (existing) {
-    console.log('Admin user already exists. Skipping creation.');
-    await prisma.$disconnect();
-    return;
-  }
+  const passwordHash = await bcrypt.hash(password, 10);
 
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
-
-  await prisma.user.create({
-    data: {
-      fullName,
-      email: adminEmail,
-      passwordHash,
-      role: 'ADMIN',
-      status: 'ACTIVE',
-    },
+  // Upsert so re-running the seed updates the password instead of failing.
+  await prisma.user.upsert({
+    where: { username },
+    update: { passwordHash, fullName },
+    create: { username, passwordHash, fullName },
   });
 
-  console.log('Admin user created successfully.');
-  console.log(`Email: ${adminEmail}`);
-  console.log(`Password: ${adminPassword}`);
+  console.log('Admin user is ready.');
+  console.log(`Username: ${username}`);
+  console.log(`Password: ${password}`);
 
   await prisma.$disconnect();
 }

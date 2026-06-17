@@ -1,19 +1,22 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { ErrorRequestHandler } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import authRoutes from './routes/auth';
-import userRoutes from './routes/users';
-import textbookRoutes from './routes/textbooks';
 import textbookRequestRoutes from './routes/textbookRequests';
 import dashboardRoutes from './routes/dashboard';
-import notificationRoutes from './routes/notifications';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-const allowedOrigins = [FRONTEND_URL, 'http://localhost:3000', 'http://localhost:3001'];
+const allowedOrigins = [
+  FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+];
 
 // Railway (and most PaaS) terminate TLS at a proxy and forward over http.
 // Trust the proxy so `req.secure` / `req.protocol` reflect the original HTTPS
@@ -41,11 +44,38 @@ app.use(
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/textbooks', textbookRoutes);
 app.use('/api/textbook-requests', textbookRequestRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/notifications', notificationRoutes);
+
+// Central error handler. Async route rejections are routed here by makeRouter()
+// (see lib/router.ts). A transient database connectivity error returns a 503 so
+// the client can retry, instead of crashing the server.
+const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  // Transient database problems — usually the Railway proxy under load:
+  //   P1001 can't reach server, P1002 connection timed out,
+  //   P1008 operation/socket timed out, P1017 connection closed by server.
+  // Surface these as 503 so the client knows to retry.
+  const code = (err as { code?: string })?.code;
+  const dbUnavailable = code === 'P1001' || code === 'P1002' || code === 'P1008' || code === 'P1017';
+  console.error('[API error]', err);
+  if (res.headersSent) return;
+  res.status(dbUnavailable ? 503 : 500).json({
+    message: dbUnavailable
+      ? 'The database is temporarily unavailable. Please try again in a moment.'
+      : 'Something went wrong. Please try again.',
+  });
+};
+app.use(errorHandler);
+
+// Last-resort safety net: never let a stray rejection or exception terminate
+// the process. Log it and keep serving — a transient DB blip must not take the
+// whole backend down.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
 
 app.listen(PORT, () => {
   console.log(`Backend API listening on http://localhost:${PORT}`);
