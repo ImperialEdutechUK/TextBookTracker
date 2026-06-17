@@ -1,48 +1,72 @@
-import { Router } from 'express';
-import { Prisma, TextbookStatus } from '@prisma/client';
+import multer from 'multer';
+import crypto from 'crypto';
+import { Prisma, RequestStatus, RequestEventType } from '@prisma/client';
 import { prisma } from '../lib/db';
-import { requireAuth, requireRole } from '../middleware/requireAdmin';
-import { SessionPayload } from '../lib/auth';
+import { makeRouter } from '../lib/router';
+import { ensureCached, removeCached } from '../lib/pdfCache';
+import { requireAuth } from '../middleware/requireAdmin';
 
-const router = Router();
+const router = makeRouter();
 router.use(requireAuth);
 
-const VALID_STATUSES = Object.values(TextbookStatus);
+const VALID_STATUSES = Object.values(RequestStatus);
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
 
-const requestInclude = {
-  learner: { select: { id: true, fullName: true } },
-  creator: { select: { id: true, fullName: true } },
-  textbook: { select: { id: true, textbookName: true } },
-} satisfies Prisma.TextbookRequestInclude;
+// Keep the PDF bytes in memory so they can be persisted to the database. Hosts
+// like Railway have an ephemeral filesystem, so the DB is the only durable store.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed.'));
+    }
+  },
+});
 
-type RequestWithRelations = Prisma.TextbookRequestGetPayload<{
-  include: typeof requestInclude;
-}>;
+// Every column EXCEPT the multi-MB `fileData` blob. List and detail endpoints
+// must never pull the PDF bytes: doing so transferred ~33MB per row out of the
+// remote database, which made the dashboard and list endpoints hang (the query
+// gets stuck mid-transfer if the client is slow, holding a DB connection). Only
+// the dedicated GET /:id/pdf endpoint reads `fileData`.
+const REQUEST_SELECT = {
+  id: true,
+  fullName: true,
+  email: true,
+  contactNumber: true,
+  course: true,
+  units: true,
+  address: true,
+  status: true,
+  trackingNumber: true,
+  fileName: true,
+  originalName: true,
+  fileSize: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.TextbookRequestSelect;
 
-function serializeRequest(r: RequestWithRelations) {
+type RequestRow = Prisma.TextbookRequestGetPayload<{ select: typeof REQUEST_SELECT }>;
+
+function serialize(r: RequestRow) {
   return {
     requestId: r.id.toString(),
-    learner: { id: r.learnerId.toString(), fullName: r.learner.fullName },
-    textbook: { id: r.textbookId.toString(), name: r.textbook.textbookName },
-    creator: { id: r.creatorId.toString(), fullName: r.creator.fullName },
-    currentStatus: r.currentStatus,
+    fullName: r.fullName,
+    email: r.email,
+    contactNumber: r.contactNumber,
+    course: r.course,
+    units: r.units,
+    address: r.address,
+    status: r.status,
+    trackingNumber: r.trackingNumber,
+    hasFile: Boolean(r.fileName),
+    originalName: r.originalName,
+    fileSize: r.fileSize ? Number(r.fileSize) : null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
-}
-
-function accessFilter(session: SessionPayload): Prisma.TextbookRequestWhereInput {
-  switch (session.role) {
-    case 'ADMIN':
-    case 'MANAGER':
-      return {};
-    case 'CREATOR':
-      return { creatorId: BigInt(session.userId) };
-    default:
-      return { learnerId: BigInt(session.userId) };
-  }
 }
 
 function parseId(value: unknown): bigint | null {
@@ -56,141 +80,107 @@ function parseId(value: unknown): bigint | null {
   }
 }
 
-router.get('/options', async (_req, res) => {
-  const [learnersRaw, textbooksRaw] = await Promise.all([
-    prisma.user.findMany({
-      where: { status: 'ACTIVE', role: 'VIEWER' },
-      orderBy: { fullName: 'asc' },
-      select: { id: true, fullName: true },
-    }),
-    prisma.textbook.findMany({
-      orderBy: { textbookName: 'asc' },
-      select: { id: true, textbookName: true },
-    }),
-  ]);
-  return res.json({
-    learners: learnersRaw.map((u) => ({ id: u.id.toString(), fullName: u.fullName })),
-    textbooks: textbooksRaw.map((t) => ({ id: t.id.toString(), name: t.textbookName })),
-    statuses: VALID_STATUSES,
-  });
-});
+// Build the WHERE clause shared by the list and CSV export endpoints.
+function buildWhere(query: Record<string, unknown>): Prisma.TextbookRequestWhereInput {
+  const filters: Prisma.TextbookRequestWhereInput[] = [{ deletedAt: null }];
 
-router.get('/', async (req, res) => {
-  const session = req.session!;
-  const page = Math.max(1, Number(req.query.page) || 1);
-  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(req.query.pageSize) || DEFAULT_PAGE_SIZE));
-  const filters: Prisma.TextbookRequestWhereInput[] = [{ deletedAt: null }, accessFilter(session)];
-
-  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
     filters.push({
       OR: [
-        { learner: { fullName: { contains: search, mode: 'insensitive' } } },
-        { textbook: { textbookName: { contains: search, mode: 'insensitive' } } },
-        { textbook: { subject: { contains: search, mode: 'insensitive' } } },
+        { fullName: { contains: search, mode: 'insensitive' } },
+        { course: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { contactNumber: { contains: search, mode: 'insensitive' } },
+        { trackingNumber: { contains: search, mode: 'insensitive' } },
       ],
     });
   }
 
-  const status = req.query.status;
-  if (typeof status === 'string' && status) {
-    if (!VALID_STATUSES.includes(status as TextbookStatus)) {
-      return res.status(400).json({ message: 'Invalid status filter.' });
+  const status = query.status;
+  if (typeof status === 'string' && status && VALID_STATUSES.includes(status as RequestStatus)) {
+    filters.push({ status: status as RequestStatus });
+  }
+
+  return { AND: filters };
+}
+
+// Validate and normalise the learner-detail fields from a create/update body.
+const FIELDS = ['fullName', 'email', 'contactNumber', 'course', 'units', 'address'] as const;
+type FieldName = (typeof FIELDS)[number];
+
+function readFields(body: Record<string, unknown>, requireAll: boolean) {
+  const data: Partial<Record<FieldName, string>> = {};
+  for (const field of FIELDS) {
+    const raw = body[field];
+    if (raw === undefined) {
+      if (requireAll) return { error: `${field} is required.` };
+      continue;
     }
-    filters.push({ currentStatus: status as TextbookStatus });
+    const value = String(raw).trim();
+    if (!value) return { error: `${field} cannot be empty.` };
+    data[field] = value;
+  }
+  return { data };
+}
+
+router.get('/', async (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Number(req.query.pageSize) || DEFAULT_PAGE_SIZE)
+  );
+
+  const status = req.query.status;
+  if (typeof status === 'string' && status && !VALID_STATUSES.includes(status as RequestStatus)) {
+    return res.status(400).json({ message: 'Invalid status filter.' });
   }
 
-  const learnerId = req.query.learnerId ? parseId(req.query.learnerId) : null;
-  if (learnerId) filters.push({ learnerId });
-
-  const creatorId = req.query.creatorId ? parseId(req.query.creatorId) : null;
-  if (creatorId) filters.push({ creatorId });
-
-  const createdAt: Prisma.DateTimeFilter = {};
-  if (typeof req.query.dateFrom === 'string' && req.query.dateFrom) {
-    const from = new Date(req.query.dateFrom);
-    if (!Number.isNaN(from.getTime())) createdAt.gte = from;
-  }
-  if (typeof req.query.dateTo === 'string' && req.query.dateTo) {
-    const to = new Date(req.query.dateTo);
-    if (!Number.isNaN(to.getTime())) createdAt.lte = to;
-  }
-  if (Object.keys(createdAt).length > 0) filters.push({ createdAt });
-
-  const where: Prisma.TextbookRequestWhereInput = { AND: filters };
+  const where = buildWhere(req.query as Record<string, unknown>);
   const [rows, total] = await prisma.$transaction([
     prisma.textbookRequest.findMany({
       where,
-      include: requestInclude,
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
+      select: REQUEST_SELECT,
     }),
     prisma.textbookRequest.count({ where }),
   ]);
 
   return res.json({
-    requests: rows.map(serializeRequest),
+    requests: rows.map(serialize),
     pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
   });
 });
 
 router.get('/export/csv', async (req, res) => {
-  const session = req.session!;
-  const filters: Prisma.TextbookRequestWhereInput[] = [{ deletedAt: null }, accessFilter(session)];
-
-  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
-  if (search) {
-    filters.push({
-      OR: [
-        { learner: { fullName: { contains: search, mode: 'insensitive' } } },
-        { textbook: { textbookName: { contains: search, mode: 'insensitive' } } },
-        { textbook: { subject: { contains: search, mode: 'insensitive' } } },
-      ],
-    });
-  }
-  const status = req.query.status;
-  if (typeof status === 'string' && status && VALID_STATUSES.includes(status as TextbookStatus)) {
-    filters.push({ currentStatus: status as TextbookStatus });
-  }
-  const learnerId = req.query.learnerId ? parseId(req.query.learnerId) : null;
-  if (learnerId) filters.push({ learnerId });
-  const createdAt: Prisma.DateTimeFilter = {};
-  if (typeof req.query.dateFrom === 'string' && req.query.dateFrom) {
-    const from = new Date(req.query.dateFrom);
-    if (!Number.isNaN(from.getTime())) createdAt.gte = from;
-  }
-  if (typeof req.query.dateTo === 'string' && req.query.dateTo) {
-    const to = new Date(req.query.dateTo);
-    if (!Number.isNaN(to.getTime())) createdAt.lte = to;
-  }
-  if (Object.keys(createdAt).length > 0) filters.push({ createdAt });
-
   const rows = await prisma.textbookRequest.findMany({
-    where: { AND: filters },
+    where: buildWhere(req.query as Record<string, unknown>),
     orderBy: { createdAt: 'desc' },
     take: 5000,
-    include: {
-      learner: { select: { fullName: true } },
-      creator: { select: { fullName: true } },
-      textbook: { select: { textbookName: true, author: true, subject: true } },
-    },
+    select: REQUEST_SELECT,
   });
 
   const esc = (v: string | null | undefined) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const header = ['Request ID', 'Textbook', 'Author', 'Subject', 'Learner', 'Creator', 'Status', 'Created At', 'Updated At'];
+  const header = [
+    'Request ID', 'Full Name', 'Email', 'Contact Number', 'Course', 'Units',
+    'Delivery Address', 'Status', 'Tracking Number', 'PDF', 'Created At',
+  ];
   const lines = [header.join(',')];
   for (const r of rows) {
     lines.push([
       esc(r.id.toString()),
-      esc(r.textbook.textbookName),
-      esc(r.textbook.author),
-      esc(r.textbook.subject),
-      esc(r.learner.fullName),
-      esc(r.creator.fullName),
-      esc(r.currentStatus),
+      esc(r.fullName),
+      esc(r.email),
+      esc(r.contactNumber),
+      esc(r.course),
+      esc(r.units),
+      esc(r.address),
+      esc(r.status),
+      esc(r.trackingNumber),
+      esc(r.originalName ?? ''),
       esc(r.createdAt.toISOString()),
-      esc(r.updatedAt.toISOString()),
     ].join(','));
   }
 
@@ -199,162 +189,86 @@ router.get('/export/csv', async (req, res) => {
   return res.send(lines.join('\n'));
 });
 
-// Books that have reached PRINTED status are physically in the print shop.
-// We dedupe by textbook (not request) because the point is to know a given book
-// is already printed so it isn't sent for printing again. Visible to any
-// authenticated user — being "in the print shop" is a shop-wide fact.
-router.get('/print-shop', async (req, res) => {
-  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
-  const filters: Prisma.TextbookRequestWhereInput[] = [
-    { deletedAt: null },
-    { currentStatus: 'PRINTED' },
-  ];
-  if (search) {
-    filters.push({ textbook: { textbookName: { contains: search, mode: 'insensitive' } } });
-  }
-
-  const rows = await prisma.textbookRequest.findMany({
-    where: { AND: filters },
-    orderBy: { updatedAt: 'desc' },
-    include: {
-      textbook: { select: { id: true, textbookName: true, author: true, subject: true } },
-    },
-  });
-
-  // First row per textbook is the most recently printed (rows are sorted desc).
-  const byBook = new Map<
-    string,
-    { textbookId: string; textbookName: string; author: string | null; subject: string | null; printedAt: string; printedCount: number }
-  >();
-  for (const r of rows) {
-    const key = r.textbookId.toString();
-    const existing = byBook.get(key);
-    if (existing) {
-      existing.printedCount += 1;
-    } else {
-      byBook.set(key, {
-        textbookId: key,
-        textbookName: r.textbook.textbookName,
-        author: r.textbook.author,
-        subject: r.textbook.subject,
-        printedAt: r.updatedAt.toISOString(),
-        printedCount: 1,
-      });
-    }
-  }
-
-  return res.json({ books: Array.from(byBook.values()) });
-});
-
 router.get('/:id', async (req, res) => {
-  const session = req.session!;
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ message: 'Invalid request id.' });
 
   const request = await prisma.textbookRequest.findFirst({
-    where: { AND: [{ id }, { deletedAt: null }, accessFilter(session)] },
-    include: {
-      ...requestInclude,
-      statusHistory: {
-        orderBy: { changedAt: 'asc' },
-        include: { changedByUser: { select: { fullName: true } } },
+    where: { id, deletedAt: null },
+    select: {
+      ...REQUEST_SELECT,
+      events: {
+        orderBy: { createdAt: 'asc' },
+        select: { type: true, detail: true, createdAt: true },
       },
     },
   });
   if (!request) return res.status(404).json({ message: 'Textbook request not found.' });
 
+  const { events, ...rest } = request;
   return res.json({
     request: {
-      ...serializeRequest(request),
-      statusHistory: request.statusHistory.map((h) => ({
-        status: h.status,
-        changedAt: h.changedAt.toISOString(),
-        changedBy: h.changedByUser.fullName,
+      ...serialize(rest),
+      events: events.map((e) => ({
+        type: e.type,
+        detail: e.detail,
+        createdAt: e.createdAt.toISOString(),
       })),
     },
   });
 });
 
-router.post('/', requireRole('CREATOR', 'ADMIN'), async (req, res) => {
-  const session = req.session!;
-  const { learnerId: rawLearnerId, textbookId: rawTextbookId } = req.body ?? {};
+router.post('/', async (req, res) => {
+  const { data, error } = readFields(req.body ?? {}, true);
+  if (error || !data) return res.status(400).json({ message: error ?? 'Invalid request.' });
 
-  const learnerId = parseId(rawLearnerId);
-  if (!learnerId) return res.status(400).json({ message: 'A valid learner must be selected.' });
-
-  const textbookId = parseId(rawTextbookId);
-  if (!textbookId) return res.status(400).json({ message: 'A valid textbook must be selected.' });
-
-  const [learner, textbook] = await Promise.all([
-    prisma.user.findUnique({ where: { id: learnerId }, select: { status: true } }),
-    prisma.textbook.findUnique({ where: { id: textbookId }, select: { id: true } }),
-  ]);
-
-  if (!learner || learner.status !== 'ACTIVE') {
-    return res.status(400).json({ message: 'Selected learner is not a valid active user.' });
-  }
-  if (!textbook) return res.status(400).json({ message: 'Selected textbook does not exist.' });
-
-  const creatorId = BigInt(session.userId);
   const created = await prisma.textbookRequest.create({
     data: {
-      learnerId,
-      textbookId,
-      creatorId,
-      currentStatus: 'CREATED',
-      statusHistory: { create: { status: 'CREATED', changedBy: creatorId } },
+      fullName: data.fullName!,
+      email: data.email!,
+      contactNumber: data.contactNumber!,
+      course: data.course!,
+      units: data.units!,
+      address: data.address!,
+      status: 'RECEIVED',
+      events: { create: { type: 'CREATED' } },
     },
-    select: { id: true },
+    select: REQUEST_SELECT,
   });
 
-  return res.status(201).json({ requestId: created.id.toString(), message: 'Textbook request created successfully' });
+  return res.status(201).json({ request: serialize(created), message: 'Request created successfully.' });
 });
 
-router.put('/:id', requireRole('CREATOR', 'ADMIN'), async (req, res) => {
-  const session = req.session!;
+router.put('/:id', async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ message: 'Invalid request id.' });
 
   const existing = await prisma.textbookRequest.findFirst({
     where: { id, deletedAt: null },
-    select: { creatorId: true },
+    select: { id: true },
   });
   if (!existing) return res.status(404).json({ message: 'Textbook request not found.' });
 
-  if (session.role !== 'ADMIN' && existing.creatorId !== BigInt(session.userId)) {
-    return res.status(403).json({ message: 'You can only edit requests you created.' });
+  const { data, error } = readFields(req.body ?? {}, false);
+  if (error || !data) return res.status(400).json({ message: error ?? 'Invalid request.' });
+
+  const update: Prisma.TextbookRequestUpdateInput = { ...data };
+
+  // The tracking number can be edited later if it changes at the print site.
+  if (req.body?.trackingNumber !== undefined) {
+    const tn = String(req.body.trackingNumber).trim();
+    update.trackingNumber = tn || null;
   }
 
-  const { learnerId: rawLearnerId, textbookId: rawTextbookId } = req.body ?? {};
-  const data: Prisma.TextbookRequestUpdateInput = {};
-
-  if (rawLearnerId !== undefined) {
-    const learnerId = parseId(rawLearnerId);
-    if (!learnerId) return res.status(400).json({ message: 'A valid learner must be selected.' });
-    const learner = await prisma.user.findUnique({ where: { id: learnerId }, select: { status: true } });
-    if (!learner || learner.status !== 'ACTIVE') {
-      return res.status(400).json({ message: 'Selected learner is not a valid active user.' });
-    }
-    data.learner = { connect: { id: learnerId } };
-  }
-
-  if (rawTextbookId !== undefined) {
-    const textbookId = parseId(rawTextbookId);
-    if (!textbookId) return res.status(400).json({ message: 'A valid textbook must be selected.' });
-    const textbook = await prisma.textbook.findUnique({ where: { id: textbookId }, select: { id: true } });
-    if (!textbook) return res.status(400).json({ message: 'Selected textbook does not exist.' });
-    data.textbook = { connect: { id: textbookId } };
-  }
-
-  if (Object.keys(data).length === 0) {
+  if (Object.keys(update).length === 0) {
     return res.status(400).json({ message: 'No valid update fields were provided.' });
   }
 
-  await prisma.textbookRequest.update({ where: { id }, data });
-  return res.json({ message: 'Textbook request updated successfully.' });
+  const updated = await prisma.textbookRequest.update({ where: { id }, data: update, select: REQUEST_SELECT });
+  return res.json({ request: serialize(updated), message: 'Request updated successfully.' });
 });
 
-router.delete('/:id', requireRole('ADMIN'), async (req, res) => {
+router.delete('/:id', async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ message: 'Invalid request id.' });
 
@@ -364,56 +278,173 @@ router.delete('/:id', requireRole('ADMIN'), async (req, res) => {
   });
   if (!existing) return res.status(404).json({ message: 'Textbook request not found.' });
 
-  await prisma.textbookRequest.update({ where: { id }, data: { deletedAt: new Date() } });
-  return res.json({ message: 'Textbook request deleted successfully.' });
+  await prisma.textbookRequest.update({ where: { id }, data: { deletedAt: new Date() }, select: { id: true } });
+  return res.json({ message: 'Request deleted successfully.' });
 });
 
-// Allowed moves in BOTH directions. Forward = normal workflow; backward =
-// revert one step (logged in history like any other change).
-const TRANSITIONS: Array<{ from: TextbookStatus; to: TextbookStatus; roles: string[] }> = [
-  { from: 'CREATED',              to: 'REQUESTED_BY_LEARNER', roles: ['CREATOR', 'ADMIN'] },
-  { from: 'REQUESTED_BY_LEARNER', to: 'SHARED_WITH_MANAGER',  roles: ['MANAGER', 'ADMIN'] },
-  { from: 'SHARED_WITH_MANAGER',  to: 'SENT_TO_PRINT',        roles: ['MANAGER', 'ADMIN'] },
-  { from: 'SENT_TO_PRINT',        to: 'PRINTED',              roles: ['MANAGER', 'ADMIN'] },
-  { from: 'REQUESTED_BY_LEARNER', to: 'CREATED',              roles: ['CREATOR', 'ADMIN'] },
-  { from: 'SHARED_WITH_MANAGER',  to: 'REQUESTED_BY_LEARNER', roles: ['MANAGER', 'ADMIN'] },
-  { from: 'SENT_TO_PRINT',        to: 'SHARED_WITH_MANAGER',  roles: ['MANAGER', 'ADMIN'] },
-  { from: 'PRINTED',              to: 'SENT_TO_PRINT',        roles: ['ADMIN'] },
+// Allowed status moves in BOTH directions. Forward = normal workflow; backward =
+// revert one step. RECEIVED -> SENT_TO_PRINT additionally requires a tracking
+// number (entered in the "Send to print" dialog).
+const TRANSITIONS: Array<{ from: RequestStatus; to: RequestStatus }> = [
+  { from: 'RECEIVED', to: 'SENT_TO_PRINT' },
+  { from: 'SENT_TO_PRINT', to: 'PRINTED' },
+  { from: 'SENT_TO_PRINT', to: 'RECEIVED' },
+  { from: 'PRINTED', to: 'SENT_TO_PRINT' },
 ];
 
 router.patch('/:id/status', async (req, res) => {
-  const session = req.session!;
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ message: 'Invalid request id.' });
 
-  const { status: newStatus } = req.body ?? {};
-  if (!newStatus || !VALID_STATUSES.includes(newStatus as TextbookStatus)) {
+  const { status: newStatus, trackingNumber } = req.body ?? {};
+  if (!newStatus || !VALID_STATUSES.includes(newStatus as RequestStatus)) {
     return res.status(400).json({ message: 'Invalid status value.' });
   }
 
   const existing = await prisma.textbookRequest.findFirst({
     where: { id, deletedAt: null },
-    select: { currentStatus: true },
+    select: { status: true },
   });
   if (!existing) return res.status(404).json({ message: 'Request not found.' });
 
   const rule = TRANSITIONS.find(
-    (t) => t.from === existing.currentStatus && t.to === (newStatus as TextbookStatus)
+    (t) => t.from === existing.status && t.to === (newStatus as RequestStatus)
   );
   if (!rule) {
     return res.status(400).json({ message: 'Invalid status transition.' });
   }
-  if (!rule.roles.includes(session.role)) {
-    return res.status(403).json({ message: 'Your role cannot perform this transition.' });
+
+  const data: Prisma.TextbookRequestUpdateInput = { status: newStatus as RequestStatus };
+
+  // A forward move logs its own event type; a backward move logs a REVERTED
+  // event noting which status it went back to.
+  const isForward =
+    (existing.status === 'RECEIVED' && newStatus === 'SENT_TO_PRINT') ||
+    (existing.status === 'SENT_TO_PRINT' && newStatus === 'PRINTED');
+  let eventType: RequestEventType = isForward ? (newStatus as RequestEventType) : 'REVERTED';
+  let eventDetail: string | null = isForward ? null : `Reverted to ${newStatus}`;
+
+  // Marking Sent to print -> Printed captures the tracking number returned by
+  // the print/delivery site.
+  if (existing.status === 'SENT_TO_PRINT' && newStatus === 'PRINTED') {
+    const tn = typeof trackingNumber === 'string' ? trackingNumber.trim() : '';
+    if (!tn) {
+      return res.status(400).json({ message: 'A tracking number is required to mark as printed.' });
+    }
+    data.trackingNumber = tn;
+    eventDetail = `Tracking number: ${tn}`;
   }
 
-  const changedBy = BigInt(session.userId);
-  await prisma.$transaction([
-    prisma.textbookRequest.update({ where: { id }, data: { currentStatus: newStatus as TextbookStatus } }),
-    prisma.textbookStatusHistory.create({ data: { requestId: id, status: newStatus as TextbookStatus, changedBy } }),
-  ]);
+  data.events = { create: { type: eventType, detail: eventDetail } };
 
-  return res.json({ message: 'Status updated successfully.' });
+  const updated = await prisma.textbookRequest.update({ where: { id }, data, select: REQUEST_SELECT });
+  return res.json({ request: serialize(updated), message: 'Status updated successfully.' });
+});
+
+// Upload (or replace) the PDF attached to a request.
+router.post('/:id/pdf', (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Invalid request id.' });
+
+  upload.single('pdf')(req, res, async (err: unknown) => {
+    if (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed.';
+      return res.status(400).json({ message });
+    }
+    const file = req.file;
+    if (!file) return res.status(400).json({ message: 'A PDF file is required.' });
+
+    const existing = await prisma.textbookRequest.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, fileName: true },
+    });
+    if (!existing) return res.status(404).json({ message: 'Request not found.' });
+
+    // Replacing the PDF: drop any cached copy of the file being replaced.
+    removeCached(existing.fileName);
+
+    const updated = await prisma.textbookRequest.update({
+      where: { id },
+      data: {
+        fileName: `${crypto.randomBytes(16).toString('hex')}.pdf`,
+        originalName: file.originalname,
+        fileSize: BigInt(file.size),
+        mimeType: file.mimetype,
+        fileData: file.buffer,
+        events: { create: { type: 'PDF_ATTACHED', detail: file.originalname } },
+      },
+      select: REQUEST_SELECT,
+    });
+
+    return res.status(201).json({ request: serialize(updated), message: 'PDF uploaded successfully.' });
+  });
+});
+
+router.get('/:id/pdf', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Invalid request id.' });
+
+  // Fetch the metadata first — it is tiny and fast, so the 404 case never has
+  // to touch the multi-MB blob.
+  const meta = await prisma.textbookRequest.findFirst({
+    where: { id, deletedAt: null },
+    select: { fileName: true, originalName: true, mimeType: true },
+  });
+  if (!meta || !meta.fileName) {
+    return res.status(404).json({ message: 'No PDF found for this request.' });
+  }
+
+  // Pull the bytes out of the (remote) database AT MOST ONCE, then serve from
+  // the local disk cache. Serving from disk is fast and res.sendFile supports
+  // HTTP Range + conditional requests automatically, so the browser's PDF
+  // viewer fetches only the bytes it needs and re-opens are near-instant. This
+  // replaces re-streaming the whole blob from the DB on every click, which was
+  // slow and prone to ERR_CONNECTION_RESET.
+  let cachePath: string | null;
+  try {
+    cachePath = await ensureCached(id, meta.fileName);
+  } catch {
+    return res.status(503).json({ message: 'The PDF is temporarily unavailable. Please try again.' });
+  }
+  if (!cachePath) {
+    return res.status(404).json({ message: 'No PDF found for this request.' });
+  }
+
+  const disposition = req.query.download ? 'attachment' : 'inline';
+  res.setHeader('Content-Type', meta.mimeType ?? 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `${disposition}; filename="${encodeURIComponent(meta.originalName ?? 'textbook.pdf')}"`
+  );
+  res.sendFile(cachePath, (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).json({ message: 'Could not send the PDF.' });
+    }
+  });
+  return;
+});
+
+router.delete('/:id/pdf', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Invalid request id.' });
+
+  const existing = await prisma.textbookRequest.findFirst({
+    where: { id, deletedAt: null },
+    select: { fileName: true },
+  });
+  if (!existing) return res.status(404).json({ message: 'Request not found.' });
+  if (!existing.fileName) return res.status(404).json({ message: 'No PDF to remove.' });
+
+  const updated = await prisma.textbookRequest.update({
+    where: { id },
+    data: {
+      fileName: null, originalName: null, fileSize: null, mimeType: null, fileData: null,
+      events: { create: { type: 'PDF_REMOVED' } },
+    },
+    select: REQUEST_SELECT,
+  });
+  removeCached(existing.fileName);
+  return res.json({ request: serialize(updated), message: 'PDF removed successfully.' });
 });
 
 export default router;

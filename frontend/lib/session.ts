@@ -3,14 +3,10 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 
-export type Role = 'ADMIN' | 'CREATOR' | 'MANAGER' | 'VIEWER';
-
 export type SessionData = {
   userId: string;
-  email: string;
+  username: string;
   fullName: string;
-  role: Role;
-  status: string;
 };
 
 type SessionState = {
@@ -18,8 +14,7 @@ type SessionState = {
   loading: boolean;
 };
 
-// Loads the current session from the backend. Shared by pages that need to
-// adjust UI (e.g. show the Create button only for CREATOR/ADMIN).
+// Loads the current session from the backend.
 export function useSession(): SessionState {
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);

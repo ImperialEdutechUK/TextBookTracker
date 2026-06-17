@@ -1,13 +1,14 @@
-import { Request, Router } from 'express';
+import { Request } from 'express';
 import {
   comparePasswords,
   createSessionToken,
   getAuthCookieName,
 } from '../lib/auth';
 import { prisma } from '../lib/db';
+import { makeRouter } from '../lib/router';
 import { getSession } from '../middleware/requireAdmin';
 
-const router = Router();
+const router = makeRouter();
 const COOKIE_NAME = getAuthCookieName();
 
 // The deployed frontend and backend live on different domains, so production
@@ -31,17 +32,15 @@ function cookieOptionsFor(req: Request) {
 }
 
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body ?? {};
+  const { username, password } = req.body ?? {};
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required.' });
+  if (!username || !password) {
+    return res.status(400).json({ message: 'Username and password are required.' });
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || user.status !== 'ACTIVE') {
-    return res
-      .status(401)
-      .json({ message: 'Invalid credentials or account is not active.' });
+  const user = await prisma.user.findUnique({ where: { username } });
+  if (!user) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
   }
 
   const passwordMatches = await comparePasswords(password, user.passwordHash);
@@ -51,10 +50,8 @@ router.post('/login', async (req, res) => {
 
   const token = createSessionToken({
     userId: user.id.toString(),
-    email: user.email,
+    username: user.username,
     fullName: user.fullName,
-    role: user.role,
-    status: user.status,
   });
 
   // Set the cookie (works for same-site setups) AND return the token in the
@@ -62,7 +59,7 @@ router.post('/login', async (req, res) => {
   // what keeps auth working cross-domain, where the cookie is blocked as a
   // third-party cookie (e.g. in incognito / Safari).
   res.cookie(COOKIE_NAME, token, { ...cookieOptionsFor(req), maxAge: 60 * 60 * 24 * 1000 });
-  return res.json({ message: 'Authenticated successfully', role: user.role, token });
+  return res.json({ message: 'Authenticated successfully', token });
 });
 
 router.post('/logout', (req, res) => {

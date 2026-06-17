@@ -21,6 +21,14 @@ function getToken(req: Request): string | null {
   if (header && header.startsWith('Bearer ')) {
     return header.slice('Bearer '.length).trim();
   }
+  // Allow the token as a query param too. A direct browser navigation (used to
+  // view/download PDFs natively, so the browser streams the file with Range
+  // requests instead of buffering it all in JS) can't send an Authorization
+  // header, so the token rides along in the URL for those GET requests.
+  const queryToken = req.query?.token;
+  if (typeof queryToken === 'string' && queryToken) {
+    return queryToken;
+  }
   return req.cookies?.[getAuthCookieName()] ?? null;
 }
 
@@ -34,6 +42,7 @@ export function getSession(req: Request): SessionPayload | null {
   }
 }
 
+// There is a single admin account, so any authenticated session is the admin.
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const session = getSession(req);
   if (!session) {
@@ -41,32 +50,4 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
   req.session = session;
   next();
-}
-
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const session = getSession(req);
-  if (!session) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-  if (session.role !== 'ADMIN') {
-    return res.status(403).json({ message: 'Forbidden' });
-  }
-  req.session = session;
-  next();
-}
-
-// Guard that allows any of the given roles. Use for endpoints shared across
-// several roles, e.g. requireRole('CREATOR', 'ADMIN').
-export function requireRole(...roles: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const session = getSession(req);
-    if (!session) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-    if (!roles.includes(session.role)) {
-      return res.status(403).json({ message: 'Forbidden' });
-    }
-    req.session = session;
-    next();
-  };
 }
