@@ -448,3 +448,21 @@ router.delete('/:id/pdf', async (req, res) => {
 });
 
 export default router;
+
+router.patch('/:id', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Invalid request id.' });
+  const existing = await prisma.textbookRequest.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
+  if (!existing) return res.status(404).json({ message: 'Request not found.' });
+  const { fullName, email, contactNumber, course, units, address } = req.body ?? {};
+  const data: Record<string, string> = {};
+  if (fullName) data.fullName = fullName;
+  if (email) data.email = email;
+  if (contactNumber) data.contactNumber = contactNumber;
+  if (course) data.course = course;
+  if (units) data.units = units;
+  if (address) data.address = address;
+  if (Object.keys(data).length === 0) return res.status(400).json({ message: 'No fields to update.' });
+  await prisma.textbookRequest.update({ where: { id }, data });
+  return res.json({ message: 'Request updated.' });
+});
