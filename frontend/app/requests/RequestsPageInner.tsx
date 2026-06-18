@@ -332,7 +332,7 @@ export default function RequestsPageInner() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, margin: '0.4rem 0 0.6rem', fontSize: '0.82rem', color: '#6b7280' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{ flexShrink: 0, marginTop: 2 }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                   <div style={{ lineHeight: 1.6 }}>
-                    {r.address.split(', ').map((line: string, i: number) => (
+                    {(r.address || '').split(', ').map((line, i) => (
                       <div key={i}>{line}</div>
                     ))}
                   </div>
