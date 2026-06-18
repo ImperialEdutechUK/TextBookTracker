@@ -73,67 +73,54 @@ export default function DashboardPage() {
         <p style={{ color: 'var(--text-muted)', marginTop: '0.25rem', fontSize: '0.9rem' }}>Welcome back, {session.fullName}</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-        {cards.slice(0, 4).map((c) => (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+        {cards.map((c) => (
           <Link key={c.label} href={c.href} style={{ textDecoration: 'none' }}>
             <div className="stat-card" style={{ cursor: 'pointer', transition: 'box-shadow 0.15s, transform 0.15s' }}
               onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.boxShadow = '0 4px 16px rgba(15,23,42,0.1)'; el.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.boxShadow = ''; el.style.transform = ''; }}>
-              <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{c.label}</p>
+              <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{c.label}</p>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.75rem' }}>
-                <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text)', margin: 0, lineHeight: 1 }}>{c.value}</p>
-                <span style={{ width: 40, height: 40, borderRadius: 10, background: c.bg, color: c.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{c.icon}</span>
+                <p style={{ fontSize: '1.9rem', fontWeight: 700, color: 'var(--text)', margin: 0, lineHeight: 1 }}>{c.value}</p>
+                <span style={{ width: 38, height: 38, borderRadius: 10, background: c.bg, color: c.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{c.icon}</span>
               </div>
             </div>
           </Link>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: '1rem', marginBottom: '1.5rem' }}>
-        <Link href={cards[4].href} style={{ textDecoration: 'none' }}>
-          <div className="stat-card" style={{ cursor: 'pointer', height: '100%', transition: 'box-shadow 0.15s, transform 0.15s' }}
-            onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.boxShadow = '0 4px 16px rgba(15,23,42,0.1)'; el.style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.boxShadow = ''; el.style.transform = ''; }}>
-            <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{cards[4].label}</p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.75rem' }}>
-              <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text)', margin: 0, lineHeight: 1 }}>{cards[4].value}</p>
-              <span style={{ width: 40, height: 40, borderRadius: 10, background: cards[4].bg, color: cards[4].fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{cards[4].icon}</span>
-            </div>
-          </div>
-        </Link>
-
-        <div className="stat-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>Recent Requests</h2>
-            <Link href="/requests" style={{ fontSize: '0.82rem', color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>View all →</Link>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ padding: '0.65rem 1.5rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Learner</th>
-                <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Course</th>
-                <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                <th style={{ padding: '0.65rem 1.5rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!stats?.recentRequests?.length && (
-                <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>No requests yet</td></tr>
-              )}
-              {stats?.recentRequests?.map((r, i) => (
-                <tr key={r.requestId} style={{ borderBottom: i < (stats.recentRequests.length - 1) ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
-                  onClick={() => router.push('/requests')}
-                  onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = '#f8fafc'}
-                  onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ''}>
-                  <td style={{ padding: '0.75rem 1.5rem', fontWeight: 600, fontSize: '0.875rem', color: 'var(--text)' }}>{r.fullName}</td>
-                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-muted)', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.course}</td>
-                  <td style={{ padding: '0.75rem 1rem' }}><span className={statusPill(r.status)}>{statusLabel(r.status)}</span></td>
-                  <td style={{ padding: '0.75rem 1.5rem', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{new Date(r.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="stat-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+          <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>Recent Requests</h2>
+          <Link href="/requests" style={{ fontSize: '0.82rem', color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>View all →</Link>
         </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <th style={{ padding: '0.65rem 1.5rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Learner</th>
+              <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Course</th>
+              <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+              <th style={{ padding: '0.65rem 1.5rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!stats?.recentRequests?.length && (
+              <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>No requests yet</td></tr>
+            )}
+            {stats?.recentRequests?.map((r, i) => (
+              <tr key={r.requestId}
+                style={{ borderBottom: i < (stats.recentRequests.length - 1) ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
+                onClick={() => router.push('/requests')}
+                onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = '#f8fafc'}
+                onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ''}>
+                <td style={{ padding: '0.75rem 1.5rem', fontWeight: 600, fontSize: '0.875rem', color: 'var(--text)' }}>{r.fullName}</td>
+                <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-muted)', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.course}</td>
+                <td style={{ padding: '0.75rem 1rem' }}><span className={statusPill(r.status)}>{statusLabel(r.status)}</span></td>
+                <td style={{ padding: '0.75rem 1.5rem', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{new Date(r.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </main>
   );
