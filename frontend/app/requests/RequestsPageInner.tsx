@@ -324,14 +324,18 @@ export default function RequestsPageInner() {
                   </span>
                   <span className="req-meta-sep">|</span>
                   <span className="req-meta-item">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    {r.address}
-                  </span>
-                  <span className="req-meta-sep">|</span>
-                  <span className="req-meta-item">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     {formatDate(r.createdAt)}
                   </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, margin: '0.4rem 0 0.6rem', fontSize: '0.82rem', color: '#6b7280' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{ flexShrink: 0, marginTop: 2 }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <div style={{ lineHeight: 1.6 }}>
+                    {r.address.split(', ').map((line: string, i: number) => (
+                      <div key={i}>{line}</div>
+                    ))}
+                  </div>
                 </div>
 
                 {r.trackingNumber && (
