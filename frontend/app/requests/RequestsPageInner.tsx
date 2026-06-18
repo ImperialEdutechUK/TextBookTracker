@@ -40,24 +40,6 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function ProgressBar({ status }: { status: string }) {
-  const steps = ['RECEIVED', 'SENT_TO_PRINT', 'PRINTED'];
-  const idx = steps.indexOf(status);
-  return (
-    <div className="req-progress">
-      {steps.map((s, i) => (
-        <div key={s} style={{ display: 'flex', alignItems: 'center', flex: i < steps.length - 1 ? 1 : 'none' }}>
-          <div className={`req-progress-step${i <= idx ? ' done' : ''}${i === idx ? ' active' : ''}`}>
-            <div className="req-progress-dot" />
-            <span style={{ whiteSpace: 'nowrap' }}>{statusLabel(s)}</span>
-          </div>
-          {i < steps.length - 1 && <div className={`req-progress-line${i < idx ? ' done' : ''}`} style={{ flex: 1, margin: '0 6px' }} />}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function KebabMenu({ onEdit, onDelete, disabled }: { onEdit: () => void; onDelete: () => void; disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -86,6 +68,24 @@ function KebabMenu({ onEdit, onDelete, disabled }: { onEdit: () => void; onDelet
     </div>
   );
 }
+
+const stepCircle = (done: boolean, active: boolean, num: number) => (
+  <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, background: done ? '#16a34a' : active ? '#2563eb' : '#e2e8f0', color: done || active ? '#fff' : '#94a3b8' }}>
+    {done ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> : num}
+  </div>
+);
+
+const actionBtn = (label: string, color: string, icon: React.ReactNode, onClick: () => void, disabled: boolean) => (
+  <button disabled={disabled} onClick={onClick} style={{ background: color, color: '#fff', border: 'none', borderRadius: 8, padding: '0.55rem 1.2rem', fontSize: '0.85rem', fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: disabled ? 0.7 : 1 }}>
+    {icon}{label}
+  </button>
+);
+
+const undoBtn = (label: string, onClick: () => void, disabled: boolean) => (
+  <button disabled={disabled} onClick={onClick} style={{ background: '#fff', color: '#6b7280', border: '1px solid #d1d5db', borderRadius: 8, padding: '0.45rem 0.9rem', fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer' }}>
+    {label}
+  </button>
+);
 
 export default function RequestsPageInner() {
   const router = useRouter();
@@ -118,10 +118,7 @@ export default function RequestsPageInner() {
   const uploadTargetRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(''), 3000);
-  }
+  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
   useEffect(() => {
     apiFetch('/api/auth/me')
@@ -130,177 +127,103 @@ export default function RequestsPageInner() {
   }, [router]);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
       const data = await fetchRequests({ page, pageSize, search, status });
-      setRequests(data.requests);
-      setPagination(data.pagination);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load requests.');
-    } finally {
-      setLoading(false);
-    }
+      setRequests(data.requests); setPagination(data.pagination);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not load requests.'); }
+    finally { setLoading(false); }
   }, [page, pageSize, search, status]);
 
   useEffect(() => { if (authChecked) load(); }, [authChecked, load]);
 
-  function applySearch(e: React.FormEvent) {
-    e.preventDefault();
-    setPage(1);
-    setSearch(searchInput.trim());
-  }
+  function applySearch(e: React.FormEvent) { e.preventDefault(); setPage(1); setSearch(searchInput.trim()); }
 
   async function changeStatus(req: TextbookRequest, next: RequestStatus, trackingNumber?: string) {
-    setBusyId(req.requestId);
-    setError('');
+    setBusyId(req.requestId); setError('');
     try {
       await updateStatus(req.requestId, next, trackingNumber);
       await load();
-      showToast(next === 'SENT_TO_PRINT' ? 'Sent to print' : next === 'PRINTED' ? 'Marked as printed' : 'Status updated');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update status.');
-    } finally {
-      setBusyId(null);
-    }
+      showToast(next === 'SENT_TO_PRINT' ? 'Sent to print ✓' : next === 'PRINTED' ? 'Marked as printed ✓' : 'Status updated');
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not update status.'); }
+    finally { setBusyId(null); }
   }
 
   async function openDetails(req: TextbookRequest) {
-    setDetailOpen(true);
-    setDetail(null);
-    setDetailError('');
-    setDetailLoading(true);
-    try {
-      setDetail(await fetchRequest(req.requestId));
-    } catch (err) {
-      setDetailError(err instanceof Error ? err.message : 'Could not load details.');
-    } finally {
-      setDetailLoading(false);
-    }
+    setDetailOpen(true); setDetail(null); setDetailError(''); setDetailLoading(true);
+    try { setDetail(await fetchRequest(req.requestId)); }
+    catch (err) { setDetailError(err instanceof Error ? err.message : 'Could not load details.'); }
+    finally { setDetailLoading(false); }
   }
 
-  function openPrintDialog(req: TextbookRequest) {
-    setTrackingInput('');
-    setDialogError('');
-    setPrintDialog(req);
-  }
+  function openPrintDialog(req: TextbookRequest) { setTrackingInput(''); setDialogError(''); setPrintDialog(req); }
 
   async function confirmMarkPrinted() {
     if (!printDialog) return;
     const tn = trackingInput.trim();
     if (!tn) { setDialogError('Please enter the tracking number.'); return; }
-    const target = printDialog;
-    setPrintDialog(null);
+    const target = printDialog; setPrintDialog(null);
     await changeStatus(target, 'PRINTED', tn);
   }
 
   async function handleDelete(req: TextbookRequest) {
     if (!confirm(`Delete the request from ${req.fullName}? This cannot be undone.`)) return;
-    setBusyId(req.requestId);
-    setError('');
-    try {
-      await deleteRequest(req.requestId);
-      await load();
-      showToast('Request deleted');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete request.');
-    } finally {
-      setBusyId(null);
-    }
+    setBusyId(req.requestId); setError('');
+    try { await deleteRequest(req.requestId); await load(); showToast('Request deleted'); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not delete request.'); }
+    finally { setBusyId(null); }
   }
 
   function openEdit(req: TextbookRequest) {
     setEditTarget(req);
     setEditForm({ fullName: req.fullName, email: req.email, contactNumber: req.contactNumber, course: req.course, units: req.units, address: req.address });
-    setEditError('');
-    setEditOpen(true);
+    setEditError(''); setEditOpen(true);
   }
 
   async function saveEdit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editTarget) return;
-    setEditSaving(true);
-    setEditError('');
+    e.preventDefault(); if (!editTarget) return;
+    setEditSaving(true); setEditError('');
     try {
-      await apiFetch(`/api/textbook-requests/${editTarget.requestId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm),
-      });
-      setEditOpen(false);
-      await load();
-      showToast('Request updated');
-    } catch (err) {
-      setEditError(err instanceof Error ? err.message : 'Could not save changes.');
-    } finally {
-      setEditSaving(false);
-    }
+      await apiFetch(`/api/textbook-requests/${editTarget.requestId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editForm) });
+      setEditOpen(false); await load(); showToast('Request updated');
+    } catch (err) { setEditError(err instanceof Error ? err.message : 'Could not save changes.'); }
+    finally { setEditSaving(false); }
   }
 
-  function triggerUpload(id: string) {
-    uploadTargetRef.current = id;
-    fileInputRef.current?.click();
-  }
+  function triggerUpload(id: string) { uploadTargetRef.current = id; fileInputRef.current?.click(); }
 
   async function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    const id = uploadTargetRef.current;
-    e.target.value = '';
+    const file = e.target.files?.[0]; const id = uploadTargetRef.current; e.target.value = '';
     if (!file || !id) return;
     if (file.type !== 'application/pdf') { setError('Only PDF files are allowed.'); return; }
-    setBusyId(id);
-    setError('');
-    try {
-      await uploadPdf(id, file);
-      await load();
-      showToast('PDF uploaded');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not upload PDF.');
-    } finally {
-      setBusyId(null);
-    }
+    setBusyId(id); setError('');
+    try { await uploadPdf(id, file); await load(); showToast('PDF uploaded ✓'); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not upload PDF.'); }
+    finally { setBusyId(null); }
   }
 
   async function handleDeletePdf(req: TextbookRequest) {
-    if (!confirm(`Remove the attached PDF from ${req.fullName}'s request?`)) return;
-    setBusyId(req.requestId);
-    setError('');
-    try {
-      await deletePdf(req.requestId);
-      await load();
-      showToast('PDF removed');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not remove PDF.');
-    } finally {
-      setBusyId(null);
-    }
+    if (!confirm(`Remove the PDF from ${req.fullName}'s request?`)) return;
+    setBusyId(req.requestId); setError('');
+    try { await deletePdf(req.requestId); await load(); showToast('PDF removed'); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not remove PDF.'); }
+    finally { setBusyId(null); }
   }
 
   function viewPdf(req: TextbookRequest) { window.open(pdfUrl(req.requestId), '_blank'); }
-
   function downloadPdf(req: TextbookRequest) {
-    const a = document.createElement('a');
-    a.href = pdfUrl(req.requestId, true);
-    a.download = req.originalName ?? 'textbook.pdf';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    const a = document.createElement('a'); a.href = pdfUrl(req.requestId, true);
+    a.download = req.originalName ?? 'textbook.pdf'; document.body.appendChild(a); a.click(); a.remove();
   }
 
   async function handleExportCsv() {
     try {
       const blob = await fetchCsv({ search, status });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'textbook-requests.csv';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const a = document.createElement('a'); a.href = url; a.download = 'textbook-requests.csv';
+      document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not export CSV.');
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not export CSV.'); }
   }
 
   if (!authChecked) return <main className="main-shell"><p className="description">Loading...</p></main>;
@@ -316,10 +239,12 @@ export default function RequestsPageInner() {
           {toast}
         </div>
       )}
+
       <div className="page-header">
         <h1 className="page-title">All Requests</h1>
-        <p className="description">Track each request, attach the PDF, and advance to print</p>
+        <p className="description">Track each request through to print</p>
       </div>
+
       <div className="req-toolbar">
         <form onSubmit={applySearch} className="req-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -336,6 +261,7 @@ export default function RequestsPageInner() {
           </button>
         </div>
       </div>
+
       {showFilter && (
         <div className="req-filter-row">
           <label className="field-label" style={{ margin: 0 }}>Status</label>
@@ -344,8 +270,10 @@ export default function RequestsPageInner() {
           </select>
         </div>
       )}
+
       {error ? <div className="alert" style={{ marginBottom: '1rem' }}>{error}</div> : null}
       <input ref={fileInputRef} type="file" accept="application/pdf" onChange={onFileChosen} style={{ display: 'none' }} />
+
       {loading ? (
         <p className="description">Loading requests...</p>
       ) : requests.length === 0 ? (
@@ -357,59 +285,23 @@ export default function RequestsPageInner() {
         <div className="req-list">
           {requests.map((r) => {
             const busy = busyId === r.requestId;
-            const pdfRequired = !r.hasFile;
+            const hasPdf = r.hasFile;
+            const isSentToPrint = r.status === 'SENT_TO_PRINT';
+            const isPrinted = r.status === 'PRINTED';
             return (
               <div key={r.requestId} className="req-card">
-                <div className="req-card-top">
-                  <button type="button" className="req-headline" onClick={() => openDetails(r)} title="View full details">
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                  <button type="button" className="req-headline" onClick={() => openDetails(r)} style={{ textAlign: 'left' }}>
                     <h3 className="req-name">{r.fullName}</h3>
                     <p className="req-course">{r.course}</p>
                   </button>
-                  <div className="req-card-actions">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span>
-                    {r.status === 'RECEIVED' && (
-                      pdfRequired ? (
-                        <span className="req-pdf-locked">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                          Upload PDF first
-                        </span>
-                      ) : (
-                        <button className="btn outline req-action" disabled={busy} onClick={() => changeStatus(r, 'SENT_TO_PRINT')}>
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                          Send to print
-                        </button>
-                      )
-                    )}
-                    {r.status === 'SENT_TO_PRINT' && (
-                      pdfRequired ? (
-                        <span className="req-pdf-locked">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                          Upload PDF first
-                        </span>
-                      ) : (
-                        <button className="btn outline req-action req-action-ok" disabled={busy} onClick={() => openPrintDialog(r)}>
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-                          Mark printed
-                        </button>
-                      )
-                    )}
-                    {r.status === 'SENT_TO_PRINT' && (
-                      <button className="btn outline req-action" disabled={busy} onClick={() => changeStatus(r, 'RECEIVED')}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                        Revert
-                      </button>
-                    )}
-                    {r.status === 'PRINTED' && (
-                      <button className="btn outline req-action" disabled={busy} onClick={() => changeStatus(r, 'SENT_TO_PRINT')}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                        Revert
-                      </button>
-                    )}
                     <KebabMenu onEdit={() => openEdit(r)} onDelete={() => handleDelete(r)} disabled={busy} />
                   </div>
                 </div>
-                <ProgressBar status={r.status} />
-                <div className="req-meta">
+
+                <div className="req-meta" style={{ marginBottom: '0.75rem' }}>
                   <span className="req-meta-item">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                     {r.contactNumber}
@@ -430,49 +322,85 @@ export default function RequestsPageInner() {
                     {formatDate(r.createdAt)}
                   </span>
                 </div>
+
                 {r.trackingNumber && (
-                  <p className="req-tracking">Tracking number: <span>{r.trackingNumber}</span></p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 12px', fontSize: '0.82rem' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                    <span style={{ color: '#15803d', fontWeight: 600 }}>Tracking number: {r.trackingNumber}</span>
+                  </div>
                 )}
-                <div className="req-pdf">
-                  {r.hasFile ? (
-                    <>
-                      <span className="req-pdf-file">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/></svg>
-                        <span className="req-pdf-name">{r.originalName}</span>
-                        <span className="req-pdf-size">{formatSize(r.fileSize)}</span>
-                      </span>
-                      <div className="req-pdf-actions">
-                        <button className="btn outline req-action" disabled={busy} onClick={() => viewPdf(r)}>
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                          View
-                        </button>
-                        <button className="btn outline req-action" disabled={busy} onClick={() => downloadPdf(r)}>
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                          Download
-                        </button>
-                        <button className="btn outline req-action req-action-danger" disabled={busy} onClick={() => handleDeletePdf(r)} aria-label="Delete PDF">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </button>
+
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem', marginTop: '0.25rem' }}>
+                  <p style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', margin: '0 0 0.85rem 0' }}>What to do next</p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                      {stepCircle(hasPdf, !hasPdf, 1)}
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                        <div>
+                          <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: hasPdf ? '#16a34a' : '#1e293b' }}>
+                            Upload course materials PDF
+                          </p>
+                          {hasPdf && <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>{r.originalName} · {formatSize(r.fileSize)}</p>}
+                        </div>
+                        {hasPdf ? (
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <button className="btn outline req-action" disabled={busy} onClick={() => viewPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>View</button>
+                            <button className="btn outline req-action" disabled={busy} onClick={() => downloadPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>Download</button>
+                            <button className="btn outline req-action-danger" disabled={busy} onClick={() => handleDeletePdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.5rem', border: '1px solid #fecaca', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#dc2626' }} aria-label="Remove PDF">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                          </div>
+                        ) : (
+                          actionBtn(busy ? 'Uploading...' : 'Upload PDF', '#2563eb',
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+                            () => triggerUpload(r.requestId), busy)
+                        )}
                       </div>
-                    </>
-                  ) : (
-                    <>
-                      <span className="req-pdf-file req-pdf-empty">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        No PDF attached yet
-                      </span>
-                      <button className="btn req-action" disabled={busy} onClick={() => triggerUpload(r.requestId)}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        {busy ? 'Uploading...' : 'Upload PDF'}
-                      </button>
-                    </>
-                  )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', opacity: !hasPdf ? 0.45 : 1 }}>
+                      {stepCircle(isSentToPrint || isPrinted, hasPdf && !isSentToPrint && !isPrinted, 2)}
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                        <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: (isSentToPrint || isPrinted) ? '#16a34a' : '#1e293b' }}>
+                          Send to print
+                        </p>
+                        {r.status === 'RECEIVED' && hasPdf && (
+                          actionBtn('Send to Print', '#2563eb',
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+                            () => changeStatus(r, 'SENT_TO_PRINT'), busy)
+                        )}
+                        {isSentToPrint && undoBtn('← Undo', () => changeStatus(r, 'RECEIVED'), busy)}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', opacity: !isSentToPrint && !isPrinted ? 0.45 : 1 }}>
+                      {stepCircle(isPrinted, isSentToPrint, 3)}
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                        <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: isPrinted ? '#16a34a' : '#1e293b' }}>
+                          Mark as printed {isPrinted && '— done!'}
+                        </p>
+                        {isSentToPrint && (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {actionBtn('Mark Printed', '#16a34a',
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>,
+                              () => openPrintDialog(r), busy)}
+                            {undoBtn('← Undo', () => changeStatus(r, 'RECEIVED'), busy)}
+                          </div>
+                        )}
+                        {isPrinted && undoBtn('← Undo', () => changeStatus(r, 'SENT_TO_PRINT'), busy)}
+                      </div>
+                    </div>
+
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
       <div className="req-footer">
         <span className="description">
           {pagination.total === 0 ? 'No requests' : `Showing ${startIndex} to ${endIndex} of ${pagination.total} requests`}
@@ -488,23 +416,28 @@ export default function RequestsPageInner() {
           </select>
         </div>
       </div>
+
       {printDialog && (
         <div className="modal-overlay" onClick={() => setPrintDialog(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="modal-title">Mark printed</h2>
-            <p className="description">Enter the tracking number returned by the print / delivery site.</p>
-            <label className="field-label" style={{ marginTop: '1rem' }}>Tracking number</label>
+            <h2 className="modal-title">Mark as Printed</h2>
+            <p className="description">Enter the tracking number from the print / delivery site before confirming.</p>
+            <label className="field-label" style={{ marginTop: '1rem' }}>Tracking number <span style={{ color: '#ef4444' }}>*</span></label>
             <input className="input" autoFocus value={trackingInput} onChange={(e) => setTrackingInput(e.target.value)}
               placeholder="e.g. 1Z999AA10123456784"
               onKeyDown={(e) => { if (e.key === 'Enter') confirmMarkPrinted(); }} />
             {dialogError ? <div className="alert" style={{ marginTop: '0.75rem' }}>{dialogError}</div> : null}
             <div className="modal-actions">
               <button className="btn secondary" onClick={() => setPrintDialog(null)}>Cancel</button>
-              <button className="btn" onClick={confirmMarkPrinted}>Confirm &amp; mark printed</button>
+              <button className="btn" style={{ background: '#16a34a', borderColor: '#16a34a' }} onClick={confirmMarkPrinted}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><polyline points="20 6 9 17 4 12"/></svg>
+                Confirm &amp; mark printed
+              </button>
             </div>
           </div>
         </div>
       )}
+
       {editOpen && editTarget && (
         <div className="modal-overlay" onClick={() => setEditOpen(false)}>
           <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
@@ -528,6 +461,7 @@ export default function RequestsPageInner() {
           </div>
         </div>
       )}
+
       {detailOpen && (
         <div className="modal-overlay" onClick={() => setDetailOpen(false)}>
           <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
@@ -551,7 +485,7 @@ export default function RequestsPageInner() {
                   <div><dt>Course / Qualification</dt><dd>{detail.course}</dd></div>
                   <div><dt>Units Required</dt><dd>{detail.units}</dd></div>
                   <div className="detail-wide"><dt>Delivery Address</dt><dd>{detail.address}</dd></div>
-                  <div><dt>Tracking Number</dt><dd>{detail.trackingNumber ? <span className="detail-tracking">{detail.trackingNumber}</span> : <span className="detail-muted">Not sent to print yet</span>}</dd></div>
+                  <div><dt>Tracking Number</dt><dd>{detail.trackingNumber ? <span className="detail-tracking">{detail.trackingNumber}</span> : <span className="detail-muted">Not yet sent to print</span>}</dd></div>
                   <div><dt>Attached PDF</dt><dd>{detail.hasFile ? <span>{detail.originalName} <span className="detail-muted">({formatSize(detail.fileSize)})</span></span> : <span className="detail-muted">No PDF attached</span>}</dd></div>
                 </dl>
                 <h3 className="detail-section-title">Activity timeline</h3>
