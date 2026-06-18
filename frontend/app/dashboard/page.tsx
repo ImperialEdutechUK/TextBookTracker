@@ -23,6 +23,10 @@ function statusPill(s: string) {
   return 'status-pill status-inactive';
 }
 
+function daysAgo(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+}
+
 const ICONS = {
   doc:     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
   inbox:   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>,
@@ -100,25 +104,35 @@ export default function DashboardPage() {
               <th style={{ padding: '0.65rem 1.5rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Learner</th>
               <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Course</th>
               <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+              <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Waiting</th>
               <th style={{ padding: '0.65rem 1.5rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</th>
             </tr>
           </thead>
           <tbody>
             {!stats?.recentRequests?.length && (
-              <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>No requests yet</td></tr>
+              <tr><td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>No requests yet</td></tr>
             )}
-            {stats?.recentRequests?.map((r, i) => (
-              <tr key={r.requestId}
-                style={{ borderBottom: i < (stats.recentRequests.length - 1) ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
-                onClick={() => router.push('/requests')}
-                onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = '#f8fafc'}
-                onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ''}>
-                <td style={{ padding: '0.75rem 1.5rem', fontWeight: 600, fontSize: '0.875rem', color: 'var(--text)' }}>{r.fullName}</td>
-                <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-muted)', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.course}</td>
-                <td style={{ padding: '0.75rem 1rem' }}><span className={statusPill(r.status)}>{statusLabel(r.status)}</span></td>
-                <td style={{ padding: '0.75rem 1.5rem', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{new Date(r.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-              </tr>
-            ))}
+            {stats?.recentRequests?.map((r, i) => {
+              const days = daysAgo(r.createdAt);
+              const urgent = days >= 3 && r.status !== 'PRINTED';
+              return (
+                <tr key={r.requestId}
+                  style={{ borderBottom: i < (stats.recentRequests.length - 1) ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
+                  onClick={() => router.push(`/requests?search=${encodeURIComponent(r.fullName)}`)}
+                  onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = '#f8fafc'}
+                  onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ''}>
+                  <td style={{ padding: '0.75rem 1.5rem', fontWeight: 600, fontSize: '0.875rem', color: 'var(--text)' }}>{r.fullName}</td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-muted)', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.course}</td>
+                  <td style={{ padding: '0.75rem 1rem' }}><span className={statusPill(r.status)}>{statusLabel(r.status)}</span></td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: urgent ? '#dc2626' : '#6b7280', background: urgent ? '#fef2f2' : 'transparent', padding: urgent ? '2px 8px' : '0', borderRadius: 999 }}>
+                      {days === 0 ? 'Today' : `${days}d`}
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 1.5rem', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{new Date(r.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

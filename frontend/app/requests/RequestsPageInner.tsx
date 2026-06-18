@@ -40,7 +40,11 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function KebabMenu({ onEdit, onDelete, disabled }: { onEdit: () => void; onDelete: () => void; disabled: boolean }) {
+function daysAgo(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function KebabMenu({ onDelete, disabled }: { onDelete: () => void; disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -55,10 +59,6 @@ function KebabMenu({ onEdit, onDelete, disabled }: { onEdit: () => void; onDelet
       </button>
       {open && (
         <div className="kebab-menu">
-          <button className="kebab-item" onClick={() => { setOpen(false); onEdit(); }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            Edit details
-          </button>
           <button className="kebab-item danger" onClick={() => { setOpen(false); onDelete(); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             Delete request
@@ -96,8 +96,8 @@ export default function RequestsPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') ?? '');
+  const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [status, setStatus] = useState(searchParams.get('status') ?? '');
   const [showFilter, setShowFilter] = useState(!!searchParams.get('status'));
   const [page, setPage] = useState(1);
@@ -288,23 +288,34 @@ export default function RequestsPageInner() {
             const hasPdf = r.hasFile;
             const isSentToPrint = r.status === 'SENT_TO_PRINT';
             const isPrinted = r.status === 'PRINTED';
+            const days = daysAgo(r.createdAt);
+            const urgent = days >= 3 && !isPrinted;
+
             return (
-              <div key={r.requestId} className="req-card">
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+              <div key={r.requestId} className="req-card" style={{ borderLeft: urgent ? '3px solid #f59e0b' : isPrinted ? '3px solid #16a34a' : '3px solid #e2e8f0' }}>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <button type="button" className="req-headline" onClick={() => openDetails(r)} style={{ textAlign: 'left' }}>
                     <h3 className="req-name">{r.fullName}</h3>
                     <p className="req-course">{r.course}</p>
                   </button>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {urgent && <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 999 }}>{days}d waiting</span>}
                     <span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span>
-                    <KebabMenu onEdit={() => openEdit(r)} onDelete={() => handleDelete(r)} disabled={busy} />
+                    <button onClick={() => openEdit(r)} disabled={busy} style={{ fontSize: '0.78rem', fontWeight: 500, color: '#2563eb', background: 'none', border: '1px solid #dbeafe', borderRadius: 6, padding: '0.3rem 0.7rem', cursor: 'pointer' }}>Edit</button>
+                    <KebabMenu onDelete={() => handleDelete(r)} disabled={busy} />
                   </div>
                 </div>
 
-                <div className="req-meta" style={{ marginBottom: '0.75rem' }}>
+                <div className="req-meta" style={{ marginBottom: '0.6rem' }}>
                   <span className="req-meta-item">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                     {r.contactNumber}
+                  </span>
+                  <span className="req-meta-sep">|</span>
+                  <span className="req-meta-item">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    {r.email}
                   </span>
                   <span className="req-meta-sep">|</span>
                   <span className="req-meta-item">
@@ -330,71 +341,84 @@ export default function RequestsPageInner() {
                   </div>
                 )}
 
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem', marginTop: '0.25rem' }}>
-                  <p style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', margin: '0 0 0.85rem 0' }}>What to do next</p>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                      {stepCircle(hasPdf, !hasPdf, 1)}
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                        <div>
-                          <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: hasPdf ? '#16a34a' : '#1e293b' }}>
-                            Upload course materials PDF
-                          </p>
-                          {hasPdf && <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>{r.originalName} · {formatSize(r.fileSize)}</p>}
-                        </div>
-                        {hasPdf ? (
-                          <div style={{ display: 'flex', gap: '0.4rem' }}>
-                            <button className="btn outline req-action" disabled={busy} onClick={() => viewPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>View</button>
-                            <button className="btn outline req-action" disabled={busy} onClick={() => downloadPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>Download</button>
-                            <button className="btn outline req-action-danger" disabled={busy} onClick={() => handleDeletePdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.5rem', border: '1px solid #fecaca', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#dc2626' }} aria-label="Remove PDF">
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
-                          </div>
-                        ) : (
-                          actionBtn(busy ? 'Uploading...' : 'Upload PDF', '#2563eb',
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-                            () => triggerUpload(r.requestId), busy)
-                        )}
+                {isPrinted ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.85rem 1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      </div>
+                      <div>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: '#15803d' }}>All done — printed and complete</p>
+                        {hasPdf && <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#16a34a' }}>{r.originalName} · {formatSize(r.fileSize)}</p>}
                       </div>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', opacity: !hasPdf ? 0.45 : 1 }}>
-                      {stepCircle(isSentToPrint || isPrinted, hasPdf && !isSentToPrint && !isPrinted, 2)}
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                        <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: (isSentToPrint || isPrinted) ? '#16a34a' : '#1e293b' }}>
-                          Send to print
-                        </p>
-                        {r.status === 'RECEIVED' && hasPdf && (
-                          actionBtn('Send to Print', '#2563eb',
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
-                            () => changeStatus(r, 'SENT_TO_PRINT'), busy)
-                        )}
-                        {isSentToPrint && undoBtn('← Undo', () => changeStatus(r, 'RECEIVED'), busy)}
-                      </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                      {hasPdf && <>
+                        <button className="btn outline req-action" disabled={busy} onClick={() => viewPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>View PDF</button>
+                        <button className="btn outline req-action" disabled={busy} onClick={() => downloadPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>Download</button>
+                      </>}
+                      {undoBtn('← Undo', () => changeStatus(r, 'SENT_TO_PRINT'), busy)}
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', opacity: !isSentToPrint && !isPrinted ? 0.45 : 1 }}>
-                      {stepCircle(isPrinted, isSentToPrint, 3)}
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                        <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: isPrinted ? '#16a34a' : '#1e293b' }}>
-                          Mark as printed {isPrinted && '— done!'}
-                        </p>
-                        {isSentToPrint && (
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            {actionBtn('Mark Printed', '#16a34a',
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>,
-                              () => openPrintDialog(r), busy)}
-                            {undoBtn('← Undo', () => changeStatus(r, 'RECEIVED'), busy)}
-                          </div>
-                        )}
-                        {isPrinted && undoBtn('← Undo', () => changeStatus(r, 'SENT_TO_PRINT'), busy)}
-                      </div>
-                    </div>
-
                   </div>
-                </div>
+                ) : (
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem', marginTop: '0.25rem' }}>
+                    <p style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', margin: '0 0 0.85rem 0' }}>What to do next</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                        {stepCircle(hasPdf, !hasPdf, 1)}
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                          <div>
+                            <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: hasPdf ? '#16a34a' : '#1e293b' }}>Upload course materials PDF</p>
+                            {hasPdf && <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>{r.originalName} · {formatSize(r.fileSize)}</p>}
+                          </div>
+                          {hasPdf ? (
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              <button className="btn outline req-action" disabled={busy} onClick={() => viewPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>View</button>
+                              <button className="btn outline req-action" disabled={busy} onClick={() => downloadPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>Download</button>
+                              <button disabled={busy} onClick={() => handleDeletePdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.5rem', border: '1px solid #fecaca', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#dc2626' }} aria-label="Remove PDF">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                              </button>
+                            </div>
+                          ) : (
+                            actionBtn(busy ? 'Uploading...' : 'Upload PDF', '#2563eb',
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+                              () => triggerUpload(r.requestId), busy)
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', opacity: !hasPdf ? 0.45 : 1 }}>
+                        {stepCircle(isSentToPrint, hasPdf && !isSentToPrint, 2)}
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                          <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: isSentToPrint ? '#16a34a' : '#1e293b' }}>Send to print</p>
+                          {r.status === 'RECEIVED' && hasPdf && (
+                            actionBtn('Send to Print', '#2563eb',
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+                              () => changeStatus(r, 'SENT_TO_PRINT'), busy)
+                          )}
+                          {isSentToPrint && undoBtn('← Undo', () => changeStatus(r, 'RECEIVED'), busy)}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', opacity: !isSentToPrint ? 0.45 : 1 }}>
+                        {stepCircle(false, isSentToPrint, 3)}
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                          <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>Mark as printed</p>
+                          {isSentToPrint && (
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              {actionBtn('Mark Printed', '#16a34a',
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>,
+                                () => openPrintDialog(r), busy)}
+                              {undoBtn('← Undo', () => changeStatus(r, 'RECEIVED'), busy)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -430,7 +454,6 @@ export default function RequestsPageInner() {
             <div className="modal-actions">
               <button className="btn secondary" onClick={() => setPrintDialog(null)}>Cancel</button>
               <button className="btn" style={{ background: '#16a34a', borderColor: '#16a34a' }} onClick={confirmMarkPrinted}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><polyline points="20 6 9 17 4 12"/></svg>
                 Confirm &amp; mark printed
               </button>
             </div>
