@@ -10,15 +10,16 @@ type SessionData = { fullName: string; username: string };
 
 function TopHeader({ session }: { session: SessionData | null }) {
   return (
-    <header className="top-header">
-      <div className="top-header-left">
-        <Link href="/requests/new" className="btn" style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Request
-        </Link>
-      </div>
+    <header className="top-header" style={{ justifyContent: 'space-between' }}>
+      <Link href="/requests/new" className="btn" style={{ padding: '0.45rem 1.1rem', fontSize: '0.83rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Request
+      </Link>
       <div className="top-header-right">
         <div className="user-chip">
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, flexShrink: 0 }}>
+            {session?.fullName?.charAt(0).toUpperCase() ?? 'A'}
+          </div>
           <span className="user-name">{session?.fullName ?? 'Administrator'}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: '#9ca3af', flexShrink: 0 }}>
             <polyline points="6 9 12 15 18 9"/>
