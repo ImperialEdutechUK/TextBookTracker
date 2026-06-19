@@ -4,6 +4,7 @@ import { Prisma, RequestStatus, RequestEventType } from '@prisma/client';
 import { prisma } from '../lib/db';
 import { makeRouter } from '../lib/router';
 import { ensureCached, removeCached } from '../lib/pdfCache';
+import { notifyNewRequest } from '../lib/teamsNotify';
 import { requireAuth } from '../middleware/requireAdmin';
 
 const router = makeRouter();
@@ -234,6 +235,16 @@ router.post('/', async (req, res) => {
       events: { create: { type: 'CREATED' } },
     },
     select: REQUEST_SELECT,
+  });
+
+  // Notify the Teams chat (Workflows webhook) that a new request came in. Fired
+  // without await so a slow/failed webhook never delays or breaks the response.
+  void notifyNewRequest({
+    fullName: created.fullName,
+    email: created.email,
+    course: created.course,
+    address: created.address,
+    createdAt: created.createdAt,
   });
 
   return res.status(201).json({ request: serialize(created), message: 'Request created successfully.' });
