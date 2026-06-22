@@ -16,7 +16,7 @@ function pdfUrl(id: string, download = false) {
   return apiUrl(`/api/textbook-requests/${id}/pdf?${params.toString()}`);
 }
 
-const STATUS_FILTERS: { value: string; label: string }[] = [
+const STATUS_FILTERS = [
   { value: '', label: 'All statuses' },
   { value: 'RECEIVED', label: 'Received' },
   { value: 'SENT_TO_PRINT', label: 'Sent to Print' },
@@ -28,21 +28,53 @@ function statusBadgeClass(s: string) {
   if (s === 'SENT_TO_PRINT') return 'req-badge req-badge-sent';
   return 'req-badge req-badge-printed';
 }
-
 function formatSize(bytes: number | null) {
   if (!bytes) return '';
   const mb = bytes / (1024 * 1024);
   if (mb >= 1) return `${mb.toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
-
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
-
-function daysAgo(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+function splitName(full: string) {
+  const parts = (full || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return { first: parts[0] || '', last: '' };
+  return { first: parts[0], last: parts.slice(1).join(' ') };
 }
+function extractPostcode(address: string) {
+  const parts = (address || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1];
+    if (/united kingdom|^uk$|england|scotland|wales|northern ireland/i.test(last))
+      return parts[parts.length - 2] || '';
+    return last;
+  }
+  return parts[0] || '';
+}
+function buildCopyAll(r: TextbookRequest) {
+  const sp = splitName(r.fullName);
+  const first = r.firstName ?? sp.first;
+  const last = r.lastName ?? sp.last;
+  const postcode = extractPostcode(r.address);
+  const addr = (r.address || '').split(',').map(s => s.trim()).filter(Boolean).join('\n');
+  return [
+    `First Name: ${first}`,
+    `Last Name: ${last}`,
+    `Phone: ${r.contactNumber}`,
+    `Email: ${r.email}`,
+    `Course: ${r.course}`,
+    `Units: ${r.units}`,
+    `Postcode: ${postcode}`,
+    ``,
+    `Address:`,
+    addr,
+  ].join('\n');
+}
+
+const copyIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+);
 
 function KebabMenu({ onDelete, disabled }: { onDelete: () => void; disabled: boolean }) {
   const [open, setOpen] = useState(false);
@@ -70,22 +102,27 @@ function KebabMenu({ onDelete, disabled }: { onDelete: () => void; disabled: boo
 }
 
 const stepCircle = (done: boolean, active: boolean, num: number) => (
-  <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, background: done ? '#16a34a' : active ? '#2563eb' : '#e2e8f0', color: done || active ? '#fff' : '#94a3b8' }}>
-    {done ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> : num}
+  <div style={{ width: 27, height: 27, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, background: done ? '#16a34a' : active ? '#2563eb' : '#e2e8f0', color: done || active ? '#fff' : '#94a3b8' }}>
+    {done ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> : num}
   </div>
 );
-
-const actionBtn = (label: string, color: string, icon: React.ReactNode, onClick: () => void, disabled: boolean) => (
-  <button disabled={disabled} onClick={onClick} style={{ background: color, color: '#fff', border: 'none', borderRadius: 8, padding: '0.55rem 1.2rem', fontSize: '0.85rem', fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: disabled ? 0.7 : 1 }}>
-    {icon}{label}
-  </button>
+const bigBtn = (label: string, color: string, icon: React.ReactNode, onClick: () => void, disabled: boolean) => (
+  <button disabled={disabled} onClick={onClick} style={{ width: '100%', border: 'none', borderRadius: 8, height: 40, fontSize: 13.5, fontWeight: 600, letterSpacing: '0.01em', color: '#fff', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, boxShadow: '0 1px 2px rgba(16,24,40,0.08)' }}>{icon}{label}</button>
 );
-
-const undoBtn = (label: string, onClick: () => void, disabled: boolean) => (
-  <button disabled={disabled} onClick={onClick} style={{ background: '#fff', color: '#6b7280', border: '1px solid #d1d5db', borderRadius: 8, padding: '0.45rem 0.9rem', fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer' }}>
-    {label}
-  </button>
+const undoBtn = (onClick: () => void, disabled: boolean) => (
+  <button disabled={disabled} onClick={onClick} style={{ width: '100%', background: '#fff', color: '#475569', border: '1px solid #d8dde3', borderRadius: 8, padding: '8px 0', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>← Undo</button>
 );
+const lockNote = (text: string) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#a8b3c0', justifyContent: 'center', height: 44 }}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{text}
+  </div>
+);
+const arrow = (on: boolean) => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, flexShrink: 0, color: on ? '#2563eb' : '#cbd5e1' }}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+  </div>
+);
+const tBox = (bg: string, border: string): React.CSSProperties => ({ flex: 1, borderRadius: 14, padding: '15px 15px 17px', display: 'flex', flexDirection: 'column', gap: 11, border: `1.5px solid ${border}`, background: bg });
 
 export default function RequestsPageInner() {
   const router = useRouter();
@@ -99,10 +136,10 @@ export default function RequestsPageInner() {
   const [searchInput, setSearchInput] = useState(searchParams.get('search') ?? '');
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [status, setStatus] = useState(searchParams.get('status') ?? '');
-  const [showFilter, setShowFilter] = useState(!!searchParams.get('status'));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [printDialog, setPrintDialog] = useState<TextbookRequest | null>(null);
   const [trackingInput, setTrackingInput] = useState('');
   const [dialogError, setDialogError] = useState('');
@@ -118,7 +155,11 @@ export default function RequestsPageInner() {
   const uploadTargetRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000); }
+  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500); }
+  async function copyText(text: string, label: string) {
+    try { await navigator.clipboard.writeText(text); showToast(`${label} copied ✓`); }
+    catch { showToast('Could not copy'); }
+  }
 
   useEffect(() => {
     apiFetch('/api/auth/me')
@@ -136,6 +177,12 @@ export default function RequestsPageInner() {
   }, [page, pageSize, search, status]);
 
   useEffect(() => { if (authChecked) load(); }, [authChecked, load]);
+
+  // debounced search — filters as you type
+  useEffect(() => {
+    const t = setTimeout(() => { setPage(1); setSearch(searchInput.trim()); }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   function applySearch(e: React.FormEvent) { e.preventDefault(); setPage(1); setSearch(searchInput.trim()); }
 
@@ -157,7 +204,6 @@ export default function RequestsPageInner() {
   }
 
   function openPrintDialog(req: TextbookRequest) { setTrackingInput(''); setDialogError(''); setPrintDialog(req); }
-
   async function confirmMarkPrinted() {
     if (!printDialog) return;
     const tn = trackingInput.trim();
@@ -179,7 +225,6 @@ export default function RequestsPageInner() {
     setEditForm({ fullName: req.fullName, email: req.email, contactNumber: req.contactNumber, course: req.course, units: req.units, address: req.address });
     setEditError(''); setEditOpen(true);
   }
-
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault(); if (!editTarget) return;
     setEditSaving(true); setEditError('');
@@ -191,7 +236,6 @@ export default function RequestsPageInner() {
   }
 
   function triggerUpload(id: string) { uploadTargetRef.current = id; fileInputRef.current?.click(); }
-
   async function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; const id = uploadTargetRef.current; e.target.value = '';
     if (!file || !id) return;
@@ -201,7 +245,6 @@ export default function RequestsPageInner() {
     catch (err) { setError(err instanceof Error ? err.message : 'Could not upload PDF.'); }
     finally { setBusyId(null); }
   }
-
   async function handleDeletePdf(req: TextbookRequest) {
     if (!confirm(`Remove the PDF from ${req.fullName}'s request?`)) return;
     setBusyId(req.requestId); setError('');
@@ -209,13 +252,11 @@ export default function RequestsPageInner() {
     catch (err) { setError(err instanceof Error ? err.message : 'Could not remove PDF.'); }
     finally { setBusyId(null); }
   }
-
   function viewPdf(req: TextbookRequest) { window.open(pdfUrl(req.requestId), '_blank'); }
   function downloadPdf(req: TextbookRequest) {
     const a = document.createElement('a'); a.href = pdfUrl(req.requestId, true);
     a.download = req.originalName ?? 'textbook.pdf'; document.body.appendChild(a); a.click(); a.remove();
   }
-
   async function handleExportCsv() {
     try {
       const blob = await fetchCsv({ search, status });
@@ -227,16 +268,20 @@ export default function RequestsPageInner() {
   }
 
   if (!authChecked) return <main className="main-shell"><p className="description">Loading...</p></main>;
-
   const startIndex = pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.pageSize + 1;
   const endIndex = Math.min(pagination.page * pagination.pageSize, pagination.total);
+
+  const boxStyle: React.CSSProperties = { background: '#f9fafb', border: '1px solid #ecedf1', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 9 };
+  const copyableStyle: React.CSSProperties = { ...boxStyle };
+  const blLabel: React.CSSProperties = { fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: '#9aa6b5', marginBottom: 4 };
+  const bvVal: React.CSSProperties = { fontSize: 14, color: '#111827', fontWeight: 600 };
+  const copyBtnStyle: React.CSSProperties = { flexShrink: 0, width: 28, height: 28, borderRadius: 7, border: '1px solid #e5e7eb', background: '#fff', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' };
 
   return (
     <main className="main-shell">
       {toast && (
         <div className="toast-success">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          {toast}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>{toast}
         </div>
       )}
 
@@ -248,29 +293,47 @@ export default function RequestsPageInner() {
       <div className="req-toolbar">
         <form onSubmit={applySearch} className="req-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search by name, course, email or phone..." />
+          <input autoFocus value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Type a name, course, email or phone to find a learner..." />
+          {searchInput && (
+            <button type="button" onClick={() => { setSearchInput(''); setPage(1); setSearch(''); }} aria-label="Clear search" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', padding: 4 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          )}
         </form>
         <div className="req-toolbar-actions">
-          <button type="button" className="btn outline" onClick={() => setShowFilter((v) => !v)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '0.4rem' }}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-            Filter
-          </button>
           <button type="button" className="btn outline" onClick={handleExportCsv}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '0.4rem' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Export CSV
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '0.4rem' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
           </button>
         </div>
       </div>
 
-      {showFilter && (
-        <div className="req-filter-row">
-          <label className="field-label" style={{ margin: 0 }}>Status</label>
-          <select className="select" style={{ width: 'auto', marginTop: 0 }} value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}>
-            {STATUS_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </select>
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
+        {STATUS_FILTERS.map((f) => {
+          const active = status === f.value;
+          const theme: Record<string, { on: string; offBg: string; offText: string; offBorder: string }> = {
+            '': { on: '#1e293b', offBg: '#fff', offText: '#475569', offBorder: '#e2e8f0' },
+            'RECEIVED': { on: '#f59e0b', offBg: '#fffbeb', offText: '#b45309', offBorder: '#fde68a' },
+            'SENT_TO_PRINT': { on: '#2563eb', offBg: '#eff6ff', offText: '#1d4ed8', offBorder: '#bfdbfe' },
+            'PRINTED': { on: '#16a34a', offBg: '#f0fdf4', offText: '#15803d', offBorder: '#bbf7d0' },
+          };
+          const t = theme[f.value] || theme[''];
+          return (
+            <button key={f.value} type="button" onClick={() => { setPage(1); setStatus(f.value); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 20px', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                border: `2px solid ${active ? t.on : t.offBorder}`,
+                background: active ? t.on : t.offBg,
+                color: active ? '#fff' : t.offText,
+                boxShadow: active ? '0 2px 8px rgba(15,23,42,0.12)' : 'none' }}>
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: active ? '#fff' : t.on, display: 'inline-block' }} />
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
 
+      <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 14px' }}>
+        {loading ? 'Searching...' : `${pagination.total} ${pagination.total === 1 ? 'request' : 'requests'}${(search || status) ? ' found' : ''}`}
+      </p>
       {error ? <div className="alert" style={{ marginBottom: '1rem' }}>{error}</div> : null}
       <input ref={fileInputRef} type="file" accept="application/pdf" onChange={onFileChosen} style={{ display: 'none' }} />
 
@@ -278,151 +341,128 @@ export default function RequestsPageInner() {
         <p className="description">Loading requests...</p>
       ) : requests.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '2.5rem', color: '#6b7280' }}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" style={{ margin: '0 auto 1rem', display: 'block' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           No requests found. <Link href="/requests/new" className="nav-link">Create one</Link>.
         </div>
       ) : (
         <div className="req-list">
           {requests.map((r) => {
             const busy = busyId === r.requestId;
+            const open = openId === r.requestId;
             const hasPdf = r.hasFile;
-            const isSentToPrint = r.status === 'SENT_TO_PRINT';
+            const isReceived = r.status === 'RECEIVED';
+            const isSent = r.status === 'SENT_TO_PRINT';
             const isPrinted = r.status === 'PRINTED';
-            const days = daysAgo(r.createdAt);
-            const urgent = days >= 3 && !isPrinted;
+            const sp = splitName(r.fullName);
+            const first = r.firstName ?? sp.first;
+            const last = r.lastName ?? sp.last;
+            const postcode = extractPostcode(r.address);
+            const addrLines = (r.address || '').split(',').map(s => s.trim()).filter(Boolean);
+            const topBorder = isPrinted ? '4px solid #16a34a' : isSent ? '4px solid #2563eb' : '4px solid #f59e0b';
 
             return (
-              <div key={r.requestId} className="req-card" style={{ borderLeft: urgent ? '3px solid #f59e0b' : isPrinted ? '3px solid #16a34a' : '3px solid #e2e8f0' }}>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div key={r.requestId} className="req-card" style={{ borderTop: topBorder }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
                   <button type="button" className="req-headline" onClick={() => openDetails(r)} style={{ textAlign: 'left' }}>
                     <h3 className="req-name">{r.fullName}</h3>
                     <p className="req-course">{r.course}</p>
                   </button>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {urgent && <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 999 }}>{days}d waiting</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    <button onClick={() => copyText(buildCopyAll(r), 'All details')} disabled={busy} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,0.08)' }}>{copyIcon}Copy All</button>
                     <span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span>
-                    <button onClick={() => openEdit(r)} disabled={busy} style={{ fontSize: '0.78rem', fontWeight: 500, color: '#2563eb', background: 'none', border: '1px solid #dbeafe', borderRadius: 6, padding: '0.3rem 0.7rem', cursor: 'pointer' }}>Edit</button>
+                    <button onClick={() => openEdit(r)} disabled={busy} style={{ fontSize: 13, fontWeight: 600, color: '#475569', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 13px', cursor: 'pointer' }}>Edit</button>
                     <KebabMenu onDelete={() => handleDelete(r)} disabled={busy} />
                   </div>
                 </div>
 
-                <div className="req-meta" style={{ marginBottom: '0.6rem' }}>
-                  <span className="req-meta-item">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                    {r.contactNumber}
-                  </span>
-                  <span className="req-meta-sep">|</span>
-                  <span className="req-meta-item">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                    {r.email}
-                  </span>
-                  <span className="req-meta-sep">|</span>
-                  <span className="req-meta-item">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                    {r.units}
-                  </span>
-                  <span className="req-meta-sep">|</span>
-                  <span className="req-meta-item">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    {formatDate(r.createdAt)}
-                  </span>
-                </div>
+                <button type="button" onClick={() => setOpenId(open ? null : r.requestId)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 11px', padding: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}><polyline points="9 18 15 12 9 6"/></svg>
+                  {open ? 'Hide learner details' : 'Show learner details & copy fields'}
+                </button>
+                {open && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 11 }}>
+                  <div style={copyableStyle}>
+                    <div><div style={blLabel}>First Name</div><div style={bvVal}>{first || '—'}</div></div>
+                    <button style={copyBtnStyle} onClick={() => copyText(first, 'First name')} aria-label="Copy first name">{copyIcon}</button>
+                  </div>
+                  <div style={copyableStyle}>
+                    <div><div style={blLabel}>Last Name</div><div style={bvVal}>{last || '—'}</div></div>
+                    <button style={copyBtnStyle} onClick={() => copyText(last, 'Last name')} aria-label="Copy last name">{copyIcon}</button>
+                  </div>
+                  <div style={copyableStyle}>
+                    <div><div style={blLabel}>Phone</div><div style={bvVal}>{r.contactNumber}</div></div>
+                    <button style={copyBtnStyle} onClick={() => copyText(r.contactNumber, 'Phone')} aria-label="Copy phone">{copyIcon}</button>
+                  </div>
+                  <div style={boxStyle}><div><div style={blLabel}>Email</div><div style={bvVal}>{r.email}</div></div></div>
+                  <div style={boxStyle}><div><div style={blLabel}>Course</div><div style={bvVal}>{r.course}</div></div></div>
+                  <div style={boxStyle}><div><div style={blLabel}>Units</div><div style={bvVal}>{r.units}</div></div></div>
 
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, margin: '0.4rem 0 0.6rem', fontSize: '0.82rem', color: '#6b7280' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{ flexShrink: 0, marginTop: 2 }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                  <div style={{ lineHeight: 1.6 }}>
-                    {(r.address || '').split(', ').map((line, i) => (
-                      <div key={i}>{line}</div>
-                    ))}
+                  <div style={{ gridColumn: '1 / -1', background: '#f9fafb', border: '1px solid #ecedf1', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 9, background: '#eff4ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      </div>
+                      <div><div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#94a3b8' }}>Postcode</div><div style={{ fontSize: 17, fontWeight: 700, color: '#111827', letterSpacing: '.02em' }}>{postcode || '—'}</div></div>
+                    </div>
+                    <button onClick={() => copyText(postcode, 'Postcode')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,0.08)' }}>{copyIcon}Copy postcode</button>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1', background: '#f8fafc', border: '1px solid #eef1f5', borderRadius: 11, padding: '11px 14px' }}>
+                    <div style={blLabel}>Full Delivery Address</div>
+                    <div style={{ fontSize: 14, color: '#1f2937', fontWeight: 600, lineHeight: 1.55 }}>
+                      {addrLines.length ? addrLines.map((l, i) => <div key={i}>{l}</div>) : <span style={{ color: '#94a3b8' }}>No address</span>}
+                    </div>
                   </div>
                 </div>
-
-                {r.trackingNumber && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 12px', fontSize: '0.82rem' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
-                    <span style={{ color: '#15803d', fontWeight: 600 }}>Tracking number: {r.trackingNumber}</span>
-                  </div>
                 )}
 
-                {isPrinted ? (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.85rem 1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#94a3b8', margin: '18px 0 12px' }}>Status — complete the steps in order</p>
+                <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                  <div style={tBox(hasPdf ? '#f0fdf4' : '#eff6ff', hasPdf ? '#bbf7d0' : '#bfdbfe')}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(hasPdf, !hasPdf, 1)}<div style={{ fontSize: 13.5, fontWeight: 700, color: hasPdf ? '#15803d' : '#1e3a8a' }}>{hasPdf ? 'PDF Uploaded' : 'Upload PDF'}</div></div>
+                    {hasPdf ? (
+                      <div style={{ display: 'flex', gap: 7 }}>
+                        <button onClick={() => viewPdf(r)} disabled={busy} style={{ flex: 1, fontSize: 12, padding: '8px 0', borderRadius: 8, border: '1.5px solid #cdebd6', background: '#fff', color: '#15803d', cursor: 'pointer', fontWeight: 600 }}>View</button>
+                        <button onClick={() => downloadPdf(r)} disabled={busy} style={{ flex: 1, fontSize: 12, padding: '8px 0', borderRadius: 8, border: '1.5px solid #cdebd6', background: '#fff', color: '#15803d', cursor: 'pointer', fontWeight: 600 }}>Save</button>
+                        <button onClick={() => handleDeletePdf(r)} disabled={busy} style={{ fontSize: 12, padding: '8px 10px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer' }} aria-label="Remove PDF">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                        </button>
                       </div>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: '#15803d' }}>All done — printed and complete</p>
-                        {hasPdf && <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#16a34a' }}>{r.originalName} · {formatSize(r.fileSize)}</p>}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                      {hasPdf && <>
-                        <button className="btn outline req-action" disabled={busy} onClick={() => viewPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>View PDF</button>
-                        <button className="btn outline req-action" disabled={busy} onClick={() => downloadPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>Download</button>
-                      </>}
-                      {undoBtn('← Undo', () => changeStatus(r, 'SENT_TO_PRINT'), busy)}
-                    </div>
+                    ) : bigBtn(busy ? 'Uploading...' : 'Upload PDF', '#2563eb', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>, () => triggerUpload(r.requestId), busy)}
                   </div>
-                ) : (
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem', marginTop: '0.25rem' }}>
-                    <p style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', margin: '0 0 0.85rem 0' }}>What to do next</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                        {stepCircle(hasPdf, !hasPdf, 1)}
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                          <div>
-                            <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: hasPdf ? '#16a34a' : '#1e293b' }}>Upload course materials PDF</p>
-                            {hasPdf && <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>{r.originalName} · {formatSize(r.fileSize)}</p>}
-                          </div>
-                          {hasPdf ? (
-                            <div style={{ display: 'flex', gap: '0.4rem' }}>
-                              <button className="btn outline req-action" disabled={busy} onClick={() => viewPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>View</button>
-                              <button className="btn outline req-action" disabled={busy} onClick={() => downloadPdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}>Download</button>
-                              <button disabled={busy} onClick={() => handleDeletePdf(r)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.5rem', border: '1px solid #fecaca', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#dc2626' }} aria-label="Remove PDF">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                              </button>
-                            </div>
-                          ) : (
-                            actionBtn(busy ? 'Uploading...' : 'Upload PDF', '#2563eb',
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-                              () => triggerUpload(r.requestId), busy)
-                          )}
-                        </div>
-                      </div>
+                  {arrow(hasPdf)}
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', opacity: !hasPdf ? 0.45 : 1 }}>
-                        {stepCircle(isSentToPrint, hasPdf && !isSentToPrint, 2)}
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                          <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: isSentToPrint ? '#16a34a' : '#1e293b' }}>Send to print</p>
-                          {r.status === 'RECEIVED' && hasPdf && (
-                            actionBtn('Send to Print', '#2563eb',
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
-                              () => changeStatus(r, 'SENT_TO_PRINT'), busy)
-                          )}
-                          {isSentToPrint && undoBtn('← Undo', () => changeStatus(r, 'RECEIVED'), busy)}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', opacity: !isSentToPrint ? 0.45 : 1 }}>
-                        {stepCircle(false, isSentToPrint, 3)}
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                          <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>Mark as printed</p>
-                          {isSentToPrint && (
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                              {actionBtn('Mark Printed', '#16a34a',
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>,
-                                () => openPrintDialog(r), busy)}
-                              {undoBtn('← Undo', () => changeStatus(r, 'RECEIVED'), busy)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                    </div>
+                  <div style={tBox((isSent || isPrinted) ? '#f0fdf4' : '#f8fafc', (isSent || isPrinted) ? '#bbf7d0' : '#eef1f5')}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(isSent || isPrinted, hasPdf && isReceived, 2)}<div style={{ fontSize: 13.5, fontWeight: 700, color: (isSent || isPrinted) ? '#15803d' : hasPdf && isReceived ? '#1e3a8a' : '#94a3b8' }}>{(isSent || isPrinted) ? 'Sent to Print' : 'Send to Print'}</div></div>
+                    {isReceived && hasPdf && bigBtn('Send to Print', '#2563eb', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>, () => changeStatus(r, 'SENT_TO_PRINT'), busy)}
+                    {isReceived && !hasPdf && lockNote('Upload PDF first')}
+                    {isSent && undoBtn(() => changeStatus(r, 'RECEIVED'), busy)}
+                    {isPrinted && <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#16a34a', fontWeight: 600 }}>Done ✓</div>}
                   </div>
-                )}
+
+                  {arrow(isSent || isPrinted)}
+
+                  <div style={tBox(isPrinted ? '#f0fdf4' : isSent ? '#eff6ff' : '#f8fafc', isPrinted ? '#bbf7d0' : isSent ? '#bfdbfe' : '#eef1f5')}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(isPrinted, isSent, 3)}<div style={{ fontSize: 13.5, fontWeight: 700, color: isPrinted ? '#15803d' : isSent ? '#1e3a8a' : '#94a3b8' }}>{isPrinted ? 'Printed' : 'Mark Printed'}</div></div>
+                    {isPrinted ? (
+                      <>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: '#9aa6b5' }}>Tracking number</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#15803d', wordBreak: 'break-all' }}>{r.trackingNumber || '\u2014'}</span>
+                          {r.trackingNumber && (
+                            <button onClick={() => copyText(r.trackingNumber || '', 'Tracking number')} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 7, border: '1px solid #bbf7d0', background: '#fff', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Copy tracking number">{copyIcon}</button>
+                          )}
+                        </div>
+                        {undoBtn(() => changeStatus(r, 'SENT_TO_PRINT'), busy)}
+                      </>
+                    ) : isSent ? (
+                      <>
+                        {bigBtn('Mark Printed', '#2563eb', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><polyline points="20 6 9 17 4 12"/></svg>, () => openPrintDialog(r), busy)}
+                        {undoBtn(() => changeStatus(r, 'RECEIVED'), busy)}
+                      </>
+                    ) : lockNote('Tracking number')}
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -430,9 +470,7 @@ export default function RequestsPageInner() {
       )}
 
       <div className="req-footer">
-        <span className="description">
-          {pagination.total === 0 ? 'No requests' : `Showing ${startIndex} to ${endIndex} of ${pagination.total} requests`}
-        </span>
+        <span className="description">{pagination.total === 0 ? 'No requests' : `Showing ${startIndex} to ${endIndex} of ${pagination.total} requests`}</span>
         <div className="req-pager">
           <button className="req-pager-btn" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">‹</button>
           <span className="req-pager-current">{pagination.page}</span>
@@ -451,15 +489,11 @@ export default function RequestsPageInner() {
             <h2 className="modal-title">Mark as Printed</h2>
             <p className="description">Enter the tracking number from the print / delivery site before confirming.</p>
             <label className="field-label" style={{ marginTop: '1rem' }}>Tracking number <span style={{ color: '#ef4444' }}>*</span></label>
-            <input className="input" autoFocus value={trackingInput} onChange={(e) => setTrackingInput(e.target.value)}
-              placeholder="e.g. 1Z999AA10123456784"
-              onKeyDown={(e) => { if (e.key === 'Enter') confirmMarkPrinted(); }} />
+            <input className="input" autoFocus value={trackingInput} onChange={(e) => setTrackingInput(e.target.value)} placeholder="e.g. 1Z999AA10123456784" onKeyDown={(e) => { if (e.key === 'Enter') confirmMarkPrinted(); }} />
             {dialogError ? <div className="alert" style={{ marginTop: '0.75rem' }}>{dialogError}</div> : null}
             <div className="modal-actions">
               <button className="btn secondary" onClick={() => setPrintDialog(null)}>Cancel</button>
-              <button className="btn" style={{ background: '#16a34a', borderColor: '#16a34a' }} onClick={confirmMarkPrinted}>
-                Confirm &amp; mark printed
-              </button>
+              <button className="btn" style={{ background: '#2563eb', borderColor: '#2563eb' }} onClick={confirmMarkPrinted}>Confirm &amp; mark printed</button>
             </div>
           </div>
         </div>

@@ -34,6 +34,8 @@ const upload = multer({
 const REQUEST_SELECT = {
   id: true,
   fullName: true,
+  firstName: true,
+  lastName: true,
   email: true,
   contactNumber: true,
   course: true,
@@ -54,6 +56,8 @@ function serialize(r: RequestRow) {
   return {
     requestId: r.id.toString(),
     fullName: r.fullName,
+    firstName: r.firstName,
+    lastName: r.lastName,
     email: r.email,
     contactNumber: r.contactNumber,
     course: r.course,
@@ -106,7 +110,7 @@ function buildWhere(query: Record<string, unknown>): Prisma.TextbookRequestWhere
 }
 
 // Validate and normalise the learner-detail fields from a create/update body.
-const FIELDS = ['fullName', 'email', 'contactNumber', 'course', 'units', 'address'] as const;
+const FIELDS = ['email', 'contactNumber', 'course', 'units', 'address'] as const;
 type FieldName = (typeof FIELDS)[number];
 
 function readFields(body: Record<string, unknown>, requireAll: boolean) {
@@ -219,12 +223,40 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { data, error } = readFields(req.body ?? {}, true);
+  const body = req.body ?? {};
+  const { data, error } = readFields(body, true);
   if (error || !data) return res.status(400).json({ message: error ?? 'Invalid request.' });
+
+  let firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
+  let lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
+  let fullName = typeof body.fullName === 'string' ? body.fullName.trim() : '';
+  if (!firstName && fullName) {
+    const parts = fullName.split(/\s+/);
+    firstName = parts[0] ?? '';
+    lastName = parts.slice(1).join(' ');
+  }
+  if (!firstName) return res.status(400).json({ message: 'A first name is required.' });
+  if (!fullName) fullName = `${firstName} ${lastName}`.trim();
+
+  const force = body.force === true || body.force === 'true';
+  if (!force) {
+    const dup = await prisma.textbookRequest.findFirst({
+      where: { deletedAt: null, email: { equals: data.email!, mode: 'insensitive' } },
+      select: { fullName: true, course: true, status: true },
+    });
+    if (dup) {
+      return res.status(409).json({
+        message: `A request from this email already exists (${dup.fullName}, ${dup.course}, ${dup.status}). Create it anyway?`,
+        duplicate: true,
+      });
+    }
+  }
 
   const created = await prisma.textbookRequest.create({
     data: {
-      fullName: data.fullName!,
+      fullName,
+      firstName,
+      lastName: lastName || null,
       email: data.email!,
       contactNumber: data.contactNumber!,
       course: data.course!,
@@ -454,15 +486,27 @@ router.patch('/:id', async (req, res) => {
   if (!id) return res.status(400).json({ message: 'Invalid request id.' });
   const existing = await prisma.textbookRequest.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
   if (!existing) return res.status(404).json({ message: 'Request not found.' });
-  const { fullName, email, contactNumber, course, units, address } = req.body ?? {};
-  const data: Record<string, string> = {};
-  if (fullName) data.fullName = fullName;
+  const { fullName, firstName, lastName, email, contactNumber, course, units, address } = req.body ?? {};
+  const data: Record<string, string | null> = {};
+  if (firstName !== undefined || lastName !== undefined) {
+    const fn = String(firstName ?? '').trim();
+    const ln = String(lastName ?? '').trim();
+    data.firstName = fn;
+    data.lastName = ln || null;
+    data.fullName = `${fn} ${ln}`.trim();
+  } else if (fullName) {
+    const fnm = String(fullName).trim();
+    const parts = fnm.split(/\s+/);
+    data.fullName = fnm;
+    data.firstName = parts[0] ?? '';
+    data.lastName = parts.slice(1).join(' ') || null;
+  }
   if (email) data.email = email;
   if (contactNumber) data.contactNumber = contactNumber;
   if (course) data.course = course;
   if (units) data.units = units;
   if (address) data.address = address;
   if (Object.keys(data).length === 0) return res.status(400).json({ message: 'No fields to update.' });
-  await prisma.textbookRequest.update({ where: { id }, data });
+  await prisma.textbookRequest.update({ where: { id }, data: data as Prisma.TextbookRequestUpdateInput });
   return res.json({ message: 'Request updated.' });
 });
