@@ -11,12 +11,58 @@
 //   TEAMS_MENTION_NAME     - display name for the greeting/mention (default "Sadeev").
 
 type RequestForNotify = {
+  // The learner name is now split into first/last columns. fullName is still
+  // maintained for older rows, so it is used as a fallback when first/last are
+  // missing.
+  firstName?: string | null;
+  lastName?: string | null;
   fullName: string;
   email: string;
+  contactNumber: string;
   course: string;
+  // Combined address string (always present). Used as a fallback when the
+  // structured parts below are not supplied.
   address: string;
+  // Structured address parts from the request form. Preferred over `address`
+  // because they are unambiguous (no comma-splitting guesswork).
+  addressParts?: AddressParts | null;
   createdAt: Date;
 };
+
+type AddressParts = {
+  line1: string;
+  line2: string;
+  city: string;
+  postcode: string;
+  country: string;
+};
+
+// Prefer the split first/last name columns; fall back to the legacy fullName.
+function displayName(request: RequestForNotify): string {
+  const fromParts = [request.firstName, request.lastName]
+    .map((p) => p?.trim())
+    .filter(Boolean)
+    .join(' ');
+  return fromParts || request.fullName;
+}
+
+// Fallback only: recover address parts from the combined string built by the
+// request form as `[line1, line2, city, postcode, country]` joined with ", "
+// (empty parts dropped). Only line2 is optional and the final three are always
+// city, postcode, country, so the pieces can be recovered by counting from the
+// end. Used when structured `addressParts` were not supplied (e.g. an older
+// client that only sends the combined string).
+function parseAddress(address: string): AddressParts {
+  const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
+  const n = parts.length;
+  const country = n >= 1 ? parts[n - 1] : '';
+  const postcode = n >= 2 ? parts[n - 2] : '';
+  const city = n >= 3 ? parts[n - 3] : '';
+  const line1 = n >= 4 ? parts[0] : '';
+  // Anything between line1 and city is line2 (joined back in case it had commas).
+  const line2 = n >= 5 ? parts.slice(1, n - 3).join(', ') : '';
+  return { line1, line2, city, postcode, country };
+}
 
 // UK-friendly, human readable timestamp with the zone abbreviation so the
 // reader knows which country's time it is, e.g. "19 June 2026 at 14:32 BST".
@@ -47,6 +93,25 @@ function buildCard(request: RequestForNotify) {
   // <at> tag that is matched to the entity below. Otherwise greet by name only.
   const greeting = mentionId ? `Hi <at>${mentionName}</at>,` : 'Hi Sadeev,';
 
+  const addr = request.addressParts ?? parseAddress(request.address);
+
+  // Address shown line by line in the requested order. Address Line 2 is omitted
+  // when the learner didn't provide one. Created date stays the very last line.
+  const facts: Array<{ title: string; value: string }> = [
+    { title: 'Name', value: displayName(request) },
+    { title: 'Email', value: request.email },
+    { title: 'Phone', value: request.contactNumber },
+    { title: 'Course', value: request.course },
+    { title: 'Postcode', value: addr.postcode },
+    { title: 'Address Line 1', value: addr.line1 },
+  ];
+  if (addr.line2) facts.push({ title: 'Address Line 2', value: addr.line2 });
+  facts.push(
+    { title: 'Town / City', value: addr.city },
+    { title: 'Country', value: addr.country },
+    { title: 'Request created at', value: formatCreatedAt(request.createdAt) }
+  );
+
   const card: Record<string, unknown> = {
     type: 'AdaptiveCard',
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
@@ -62,13 +127,7 @@ function buildCard(request: RequestForNotify) {
       {
         type: 'FactSet',
         spacing: 'Medium',
-        facts: [
-          { title: 'Name', value: request.fullName },
-          { title: 'Email', value: request.email },
-          { title: 'Course', value: request.course },
-          { title: 'Address', value: request.address },
-          { title: 'Request created at', value: formatCreatedAt(request.createdAt) },
-        ],
+        facts,
       },
     ],
   };

@@ -269,13 +269,32 @@ router.post('/', async (req, res) => {
     select: REQUEST_SELECT,
   });
 
+  // Structured address parts straight from the form, when provided, so the
+  // Teams card shows clean fields instead of guessing from the combined string.
+  // Falls back (inside notifyNewRequest) to parsing `address` for older clients.
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const addressParts =
+    str(body.addressLine1) && str(body.city) && str(body.postcode)
+      ? {
+          line1: str(body.addressLine1),
+          line2: str(body.addressLine2),
+          city: str(body.city),
+          postcode: str(body.postcode),
+          country: str(body.country),
+        }
+      : null;
+
   // Notify the Teams chat (Workflows webhook) that a new request came in. Fired
   // without await so a slow/failed webhook never delays or breaks the response.
   void notifyNewRequest({
+    firstName: created.firstName,
+    lastName: created.lastName,
     fullName: created.fullName,
     email: created.email,
+    contactNumber: created.contactNumber,
     course: created.course,
     address: created.address,
+    addressParts,
     createdAt: created.createdAt,
   });
 
