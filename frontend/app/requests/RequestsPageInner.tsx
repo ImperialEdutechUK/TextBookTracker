@@ -365,7 +365,7 @@ export default function RequestsPageInner() {
                   <button type="button" className="req-headline" onClick={() => openDetails(r)} style={{ textAlign: 'left' }}>
                     <h3 className="req-name">{r.fullName}</h3>
                     <p className="req-course">{r.course}</p>
-                    <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0', fontWeight: 500 }}>Entered {formatDate(r.createdAt)}</p>
+                    <p style={{ fontSize: 13, color: '#374151', margin: '4px 0 0', fontWeight: 600 }}>Entered {formatDate(r.createdAt)}</p>
                   </button>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                     <button onClick={() => copyText(buildCopyAll(r), 'All details')} disabled={busy} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,0.08)' }}>{copyIcon}Copy All</button>
