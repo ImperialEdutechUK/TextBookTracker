@@ -392,9 +392,9 @@ export default function RequestsPageInner() {
                     <div><div style={blLabel}>Phone</div><div style={bvVal}>{r.contactNumber}</div></div>
                     <button style={copyBtnStyle} onClick={() => copyText(r.contactNumber, 'Phone')} aria-label="Copy phone">{copyIcon}</button>
                   </div>
-                  <div style={boxStyle}><div><div style={blLabel}>Email</div><div style={bvVal}>{r.email}</div></div></div>
-                  <div style={boxStyle}><div><div style={blLabel}>Course</div><div style={bvVal}>{r.course}</div></div></div>
-                  <div style={boxStyle}><div><div style={blLabel}>Units</div><div style={bvVal}>{r.units}</div></div></div>
+                  <div style={copyableStyle}><div><div style={blLabel}>Email</div><div style={bvVal}>{r.email}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.email, 'Email')} aria-label="Copy email">{copyIcon}</button></div>
+                  <div style={copyableStyle}><div><div style={blLabel}>Course</div><div style={bvVal}>{r.course}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.course, 'Course')} aria-label="Copy course">{copyIcon}</button></div>
+                  <div style={copyableStyle}><div><div style={blLabel}>Units</div><div style={bvVal}>{r.units}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.units, 'Units')} aria-label="Copy units">{copyIcon}</button></div>
 
                   <div style={{ gridColumn: '1 / -1', background: '#f9fafb', border: '1px solid #ecedf1', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -407,7 +407,7 @@ export default function RequestsPageInner() {
                   </div>
 
                   <div style={{ gridColumn: '1 / -1', background: '#f8fafc', border: '1px solid #eef1f5', borderRadius: 11, padding: '11px 14px' }}>
-                    <div style={blLabel}>Full Delivery Address</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><div style={blLabel}>Full Delivery Address</div><button style={copyBtnStyle} onClick={() => copyText(addrLines.join(String.fromCharCode(10)), 'Address')} aria-label="Copy address">{copyIcon}</button></div>
                     <div style={{ fontSize: 14, color: '#1f2937', fontWeight: 600, lineHeight: 1.55 }}>
                       {addrLines.length ? addrLines.map((l, i) => <div key={i}>{l}</div>) : <span style={{ color: '#94a3b8' }}>No address</span>}
                     </div>
