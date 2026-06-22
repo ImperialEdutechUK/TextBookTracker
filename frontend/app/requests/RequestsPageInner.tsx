@@ -360,8 +360,8 @@ export default function RequestsPageInner() {
             const topBorder = isPrinted ? '4px solid #16a34a' : isSent ? '4px solid #2563eb' : '4px solid #f59e0b';
 
             return (
-              <div key={r.requestId} className="req-card" style={{ borderTop: topBorder }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div key={r.requestId} className="req-card" style={{ borderTop: topBorder, background: '#f6f7f9' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, background: '#fff', border: '1px solid #e7eaef', borderRadius: 12, padding: 16, marginBottom: 12 }}>
                   <button type="button" className="req-headline" onClick={() => openDetails(r)} style={{ textAlign: 'left' }}>
                     <h3 className="req-name">{r.fullName}</h3>
                     <p className="req-course">{r.course}</p>
@@ -375,7 +375,8 @@ export default function RequestsPageInner() {
                   </div>
                 </div>
 
-                <button type="button" onClick={() => setOpenId(open ? null : r.requestId)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 11px', padding: 0 }}>
+                <div style={{ background: '#fff', border: '1px solid #e7eaef', borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                <button type="button" onClick={() => setOpenId(open ? null : r.requestId)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#64748b', margin: open ? '0 0 12px' : 0, padding: 0, width: '100%' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}><polyline points="9 18 15 12 9 6"/></svg>
                   {open ? 'Hide learner details' : 'Show learner details & copy fields'}
                 </button>
@@ -415,8 +416,10 @@ export default function RequestsPageInner() {
                   </div>
                 </div>
                 )}
+                </div>
 
-                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#94a3b8', margin: '18px 0 12px' }}>Status — complete the steps in order</p>
+                <div style={{ background: '#fff', border: '1px solid #e7eaef', borderRadius: 12, padding: 16, marginBottom: 0 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#475569', margin: '0 0 12px' }}>Status — complete the steps in order</p>
                 <div style={{ display: 'flex', alignItems: 'stretch' }}>
                   <div style={tBox(hasPdf ? '#f0fdf4' : '#eff6ff', hasPdf ? '#bbf7d0' : '#bfdbfe')}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(hasPdf, !hasPdf, 1)}<div style={{ fontSize: 13.5, fontWeight: 700, color: hasPdf ? '#15803d' : '#1e3a8a' }}>{hasPdf ? 'PDF Uploaded' : 'Upload PDF'}</div></div>
@@ -463,6 +466,7 @@ export default function RequestsPageInner() {
                       </>
                     ) : lockNote('Tracking number')}
                   </div>
+                </div>
                 </div>
               </div>
             );
