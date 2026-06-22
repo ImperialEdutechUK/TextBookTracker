@@ -45,6 +45,8 @@ enum RequestEventType {
 model TextbookRequest {
   id             BigInt        @id @default(autoincrement()) @map("request_id")
   fullName       String        @map("full_name")
+  firstName      String?       @map("first_name")
+  lastName       String?       @map("last_name")
   email          String
   contactNumber  String        @map("contact_number")
   course         String

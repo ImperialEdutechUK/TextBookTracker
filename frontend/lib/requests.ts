@@ -15,6 +15,8 @@ export function statusLabel(status: string) {
 export type TextbookRequest = {
   requestId: string;
   fullName: string;
+  firstName: string | null;
+  lastName: string | null;
   email: string;
   contactNumber: string;
   course: string;
@@ -68,7 +70,8 @@ export type ListParams = {
 };
 
 export type NewRequestInput = {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   contactNumber: string;
   course: string;
@@ -112,12 +115,17 @@ export async function fetchRequest(id: string): Promise<RequestDetail> {
   return data.request as RequestDetail;
 }
 
-export async function createRequest(input: NewRequestInput): Promise<TextbookRequest> {
+export class DuplicateRequestError extends Error {}
+
+export async function createRequest(input: NewRequestInput, force = false): Promise<TextbookRequest> {
   const res = await apiFetch(BASE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, force }),
   });
+  if (res.status === 409) {
+    throw new DuplicateRequestError(await readError(res, 'A request from this email already exists.'));
+  }
   if (!res.ok) throw new Error(await readError(res, 'Could not create the request.'));
   const data = await res.json();
   return data.request as TextbookRequest;
