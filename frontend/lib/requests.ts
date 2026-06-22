@@ -77,6 +77,14 @@ export type NewRequestInput = {
   course: string;
   units: string;
   address: string;
+  // Structured address parts, sent alongside the combined `address` string so
+  // downstream consumers (e.g. the Teams notification) get clean, unambiguous
+  // fields instead of having to split the combined string.
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  postcode: string;
+  country: string;
 };
 
 const BASE = '/api/textbook-requests';

@@ -34,14 +34,20 @@ export default function NewRequestPage() {
     setError('');
 
     const contactNumber = phone.trim().startsWith('+') ? phone.trim() : `+44 ${phone.trim()}`;
-    const address = [line1.trim(), line2.trim(), city.trim(), postcode.trim().toUpperCase(), country.trim()]
+    const cleanPostcode = postcode.trim().toUpperCase();
+    const address = [line1.trim(), line2.trim(), city.trim(), cleanPostcode, country.trim()]
       .filter(Boolean).join(', ');
 
     if (!firstName.trim() || !lastName.trim()) { setError('Please enter the first and last name.'); return; }
     if (!line1.trim() || !city.trim() || !postcode.trim()) { setError('Please enter the postcode, address line 1, and city.'); return; }
 
     setSaving(true);
-    const payload = { firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), contactNumber, course: course.trim(), units: units.trim(), address };
+    const payload = {
+      firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), contactNumber,
+      course: course.trim(), units: units.trim(), address,
+      addressLine1: line1.trim(), addressLine2: line2.trim(), city: city.trim(),
+      postcode: cleanPostcode, country: country.trim(),
+    };
     try {
       await createRequest(payload);
       router.push('/requests');
