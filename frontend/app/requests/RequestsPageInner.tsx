@@ -5,15 +5,15 @@ import Link from 'next/link';
 import { apiFetch, apiUrl, getToken } from '@/lib/api';
 import {
   fetchRequests, fetchRequest, deleteRequest, updateStatus, uploadPdf, deletePdf, fetchCsv,
-  statusLabel, eventLabel, TextbookRequest, RequestDetail, RequestStatus, Pagination,
+  updateBookNames, statusLabel, eventLabel, TextbookRequest, RequestDetail, RequestStatus, Pagination,
 } from '@/lib/requests';
 
-function pdfUrl(id: string, download = false) {
+function pdfUrl(id: string, slot: 1 | 2 | 3 = 1, download = false) {
   const params = new URLSearchParams();
   const token = getToken();
   if (token) params.set('token', token);
   if (download) params.set('download', '1');
-  return apiUrl(`/api/textbook-requests/${id}/pdf?${params.toString()}`);
+  return apiUrl(`/api/textbook-requests/${id}/pdf/${slot}?${params.toString()}`);
 }
 
 const STATUS_FILTERS = [
@@ -59,16 +59,9 @@ function buildCopyAll(r: TextbookRequest) {
   const postcode = extractPostcode(r.address);
   const addr = (r.address || '').split(',').map(s => s.trim()).filter(Boolean).join('\n');
   return [
-    `First Name: ${first}`,
-    `Last Name: ${last}`,
-    `Phone: ${r.contactNumber}`,
-    `Email: ${r.email}`,
-    `Course: ${r.course}`,
-    `Units: ${r.units}`,
-    `Postcode: ${postcode}`,
-    ``,
-    `Address:`,
-    addr,
+    `First Name: ${first}`, `Last Name: ${last}`, `Phone: ${r.contactNumber}`,
+    `Email: ${r.email}`, `Course: ${r.course}`, `Units: ${r.units}`,
+    `Postcode: ${postcode}`, ``, `Address:`, addr,
   ].join('\n');
 }
 
@@ -152,8 +145,12 @@ export default function RequestsPageInner() {
   const [editForm, setEditForm] = useState({ fullName: '', email: '', contactNumber: '', course: '', units: '', address: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
-  const uploadTargetRef = useRef<string | null>(null);
+  // Per-slot upload refs
+  const uploadTargetRef = useRef<{ id: string; slot: 1 | 2 | 3 } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Inline book name editing state: { [requestId-slot]: value }
+  const [bookNameEdits, setBookNameEdits] = useState<Record<string, string>>({});
+  const [savingBookName, setSavingBookName] = useState<string | null>(null);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500); }
   async function copyText(text: string, label: string) {
@@ -178,7 +175,6 @@ export default function RequestsPageInner() {
 
   useEffect(() => { if (authChecked) load(); }, [authChecked, load]);
 
-  // debounced search — filters as you type
   useEffect(() => {
     const t = setTimeout(() => { setPage(1); setSearch(searchInput.trim()); }, 300);
     return () => clearTimeout(t);
@@ -235,28 +231,39 @@ export default function RequestsPageInner() {
     finally { setEditSaving(false); }
   }
 
-  function triggerUpload(id: string) { uploadTargetRef.current = id; fileInputRef.current?.click(); }
+  function triggerUpload(id: string, slot: 1 | 2 | 3) {
+    uploadTargetRef.current = { id, slot };
+    fileInputRef.current?.click();
+  }
   async function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; const id = uploadTargetRef.current; e.target.value = '';
-    if (!file || !id) return;
+    const file = e.target.files?.[0]; const target = uploadTargetRef.current; e.target.value = '';
+    if (!file || !target) return;
     if (file.type !== 'application/pdf') { setError('Only PDF files are allowed.'); return; }
-    setBusyId(id); setError('');
-    try { await uploadPdf(id, file); await load(); showToast('PDF uploaded ✓'); }
+    setBusyId(target.id); setError('');
+    try { await uploadPdf(target.id, file, target.slot); await load(); showToast(`Textbook ${target.slot} PDF uploaded ✓`); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not upload PDF.'); }
     finally { setBusyId(null); }
   }
-  async function handleDeletePdf(req: TextbookRequest) {
-    if (!confirm(`Remove the PDF from ${req.fullName}'s request?`)) return;
+  async function handleDeletePdf(req: TextbookRequest, slot: 1 | 2 | 3) {
+    if (!confirm(`Remove the Textbook ${slot} PDF from ${req.fullName}'s request?`)) return;
     setBusyId(req.requestId); setError('');
-    try { await deletePdf(req.requestId); await load(); showToast('PDF removed'); }
+    try { await deletePdf(req.requestId, slot); await load(); showToast(`Textbook ${slot} PDF removed`); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not remove PDF.'); }
     finally { setBusyId(null); }
   }
-  function viewPdf(req: TextbookRequest) { window.open(pdfUrl(req.requestId), '_blank'); }
-  function downloadPdf(req: TextbookRequest) {
-    const a = document.createElement('a'); a.href = pdfUrl(req.requestId, true);
-    a.download = req.originalName ?? 'textbook.pdf'; document.body.appendChild(a); a.click(); a.remove();
+
+  async function saveBookName(id: string, slot: 1 | 2 | 3, value: string) {
+    const key = `${id}-${slot}`;
+    setSavingBookName(key);
+    try {
+      const names = slot === 1 ? { bookName1: value } : slot === 2 ? { bookName2: value } : { bookName3: value };
+      await updateBookNames(id, names);
+      await load();
+      showToast(`Textbook ${slot} name saved ✓`);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not save book name.'); }
+    finally { setSavingBookName(null); }
   }
+
   async function handleExportCsv() {
     try {
       const blob = await fetchCsv({ search, status });
@@ -276,6 +283,48 @@ export default function RequestsPageInner() {
   const blLabel: React.CSSProperties = { fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: '#9aa6b5', marginBottom: 4 };
   const bvVal: React.CSSProperties = { fontSize: 14, color: '#111827', fontWeight: 600 };
   const copyBtnStyle: React.CSSProperties = { flexShrink: 0, width: 28, height: 28, borderRadius: 7, border: '1px solid #e5e7eb', background: '#fff', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' };
+
+  // Renders one book slot row inside the Upload PDFs step
+  function BookSlot({ r, slot, hasPdf, originalName, fileSize, bookName, busy }: {
+    r: TextbookRequest; slot: 1 | 2 | 3; hasPdf: boolean;
+    originalName: string | null; fileSize: number | null;
+    bookName: string | null; busy: boolean;
+  }) {
+    const key = `${r.requestId}-${slot}`;
+    const editVal = bookNameEdits[key] ?? (bookName || '');
+    const saving = savingBookName === key;
+    return (
+      <div style={{ border: '1px solid #e7eaef', borderRadius: 10, padding: '11px 13px', background: '#fafbfc', marginBottom: slot < 3 ? 8 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#64748b', minWidth: 72 }}>Textbook {slot}</span>
+          <input
+            value={editVal}
+            onChange={e => setBookNameEdits(prev => ({ ...prev, [key]: e.target.value }))}
+            onBlur={() => { if (editVal !== (bookName || '')) saveBookName(r.requestId, slot, editVal); }}
+            onKeyDown={e => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
+            placeholder="Enter book name..."
+            style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#1f2937', border: '1px solid #d1d5db', borderRadius: 7, padding: '5px 10px', background: '#fff', outline: 'none' }}
+          />
+          {saving && <span style={{ fontSize: 11, color: '#94a3b8' }}>Saving...</span>}
+        </div>
+        {hasPdf ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontSize: 12, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{originalName} {fileSize ? <span style={{ color: '#94a3b8' }}>({formatSize(fileSize)})</span> : null}</span>
+            <button onClick={() => window.open(pdfUrl(r.requestId, slot), '_blank')} disabled={busy} style={{ fontSize: 12, padding: '5px 10px', borderRadius: 7, border: '1.5px solid #cdebd6', background: '#fff', color: '#15803d', cursor: 'pointer', fontWeight: 600 }}>View</button>
+            <button onClick={() => { const a = document.createElement('a'); a.href = pdfUrl(r.requestId, slot, true); a.download = originalName ?? 'textbook.pdf'; document.body.appendChild(a); a.click(); a.remove(); }} disabled={busy} style={{ fontSize: 12, padding: '5px 10px', borderRadius: 7, border: '1.5px solid #cdebd6', background: '#fff', color: '#15803d', cursor: 'pointer', fontWeight: 600 }}>Save</button>
+            <button onClick={() => handleDeletePdf(r, slot)} disabled={busy} style={{ fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer' }} aria-label={`Remove textbook ${slot} PDF`}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => triggerUpload(r.requestId, slot)} disabled={busy} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload PDF
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <main className="main-shell">
@@ -361,6 +410,7 @@ export default function RequestsPageInner() {
 
             return (
               <div key={r.requestId} className="req-card" style={{ borderTop: topBorder, background: '#f6f7f9' }}>
+                {/* Header panel */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, background: '#fff', border: '1px solid #e7eaef', borderRadius: 12, padding: 16, marginBottom: 12 }}>
                   <button type="button" className="req-headline" onClick={() => openDetails(r)} style={{ textAlign: 'left' }}>
                     <h3 className="req-name">{r.fullName}</h3>
@@ -375,98 +425,89 @@ export default function RequestsPageInner() {
                   </div>
                 </div>
 
+                {/* Learner details panel */}
                 <div style={{ background: '#fff', border: '1px solid #e7eaef', borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                <button type="button" onClick={() => setOpenId(open ? null : r.requestId)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#64748b', margin: open ? '0 0 12px' : 0, padding: 0, width: '100%' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}><polyline points="9 18 15 12 9 6"/></svg>
-                  {open ? 'Hide learner details' : 'Show learner details & copy fields'}
-                </button>
-                {open && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 11 }}>
-                  <div style={copyableStyle}>
-                    <div><div style={blLabel}>First Name</div><div style={bvVal}>{first || '—'}</div></div>
-                    <button style={copyBtnStyle} onClick={() => copyText(first, 'First name')} aria-label="Copy first name">{copyIcon}</button>
-                  </div>
-                  <div style={copyableStyle}>
-                    <div><div style={blLabel}>Last Name</div><div style={bvVal}>{last || '—'}</div></div>
-                    <button style={copyBtnStyle} onClick={() => copyText(last, 'Last name')} aria-label="Copy last name">{copyIcon}</button>
-                  </div>
-                  <div style={copyableStyle}>
-                    <div><div style={blLabel}>Phone</div><div style={bvVal}>{r.contactNumber}</div></div>
-                    <button style={copyBtnStyle} onClick={() => copyText(r.contactNumber, 'Phone')} aria-label="Copy phone">{copyIcon}</button>
-                  </div>
-                  <div style={copyableStyle}><div><div style={blLabel}>Email</div><div style={bvVal}>{r.email}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.email, 'Email')} aria-label="Copy email">{copyIcon}</button></div>
-                  <div style={copyableStyle}><div><div style={blLabel}>Course</div><div style={bvVal}>{r.course}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.course, 'Course')} aria-label="Copy course">{copyIcon}</button></div>
-                  <div style={copyableStyle}><div><div style={blLabel}>Units</div><div style={bvVal}>{r.units}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.units, 'Units')} aria-label="Copy units">{copyIcon}</button></div>
-
-                  <div style={{ gridColumn: '1 / -1', background: '#f9fafb', border: '1px solid #ecedf1', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 9, background: '#eff4ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                      </div>
-                      <div><div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#94a3b8' }}>Postcode</div><div style={{ fontSize: 17, fontWeight: 700, color: '#111827', letterSpacing: '.02em' }}>{postcode || '—'}</div></div>
-                    </div>
-                    <button onClick={() => copyText(postcode, 'Postcode')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,0.08)' }}>{copyIcon}Copy postcode</button>
-                  </div>
-
-                  <div style={{ gridColumn: '1 / -1', background: '#f8fafc', border: '1px solid #eef1f5', borderRadius: 11, padding: '11px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><div style={blLabel}>Full Delivery Address</div><button style={copyBtnStyle} onClick={() => copyText(addrLines.join(String.fromCharCode(10)), 'Address')} aria-label="Copy address">{copyIcon}</button></div>
-                    <div style={{ fontSize: 14, color: '#1f2937', fontWeight: 600, lineHeight: 1.55 }}>
-                      {addrLines.length ? addrLines.map((l, i) => <div key={i}>{l}</div>) : <span style={{ color: '#94a3b8' }}>No address</span>}
-                    </div>
-                  </div>
-                </div>
-                )}
-                </div>
-
-                <div style={{ background: '#fff', border: '1px solid #e7eaef', borderRadius: 12, padding: 16, marginBottom: 0 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#475569', margin: '0 0 12px' }}>Status — complete the steps in order</p>
-                <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                  <div style={tBox(hasPdf ? '#f0fdf4' : '#eff6ff', hasPdf ? '#bbf7d0' : '#bfdbfe')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(hasPdf, !hasPdf, 1)}<div style={{ fontSize: 13.5, fontWeight: 700, color: hasPdf ? '#15803d' : '#1e3a8a' }}>{hasPdf ? 'PDF Uploaded' : 'Upload PDF'}</div></div>
-                    {hasPdf ? (
-                      <div style={{ display: 'flex', gap: 7 }}>
-                        <button onClick={() => viewPdf(r)} disabled={busy} style={{ flex: 1, fontSize: 12, padding: '8px 0', borderRadius: 8, border: '1.5px solid #cdebd6', background: '#fff', color: '#15803d', cursor: 'pointer', fontWeight: 600 }}>View</button>
-                        <button onClick={() => downloadPdf(r)} disabled={busy} style={{ flex: 1, fontSize: 12, padding: '8px 0', borderRadius: 8, border: '1.5px solid #cdebd6', background: '#fff', color: '#15803d', cursor: 'pointer', fontWeight: 600 }}>Save</button>
-                        <button onClick={() => handleDeletePdf(r)} disabled={busy} style={{ fontSize: 12, padding: '8px 10px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer' }} aria-label="Remove PDF">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                        </button>
-                      </div>
-                    ) : bigBtn(busy ? 'Uploading...' : 'Upload PDF', '#2563eb', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>, () => triggerUpload(r.requestId), busy)}
-                  </div>
-
-                  {arrow(hasPdf)}
-
-                  <div style={tBox((isSent || isPrinted) ? '#f0fdf4' : '#f8fafc', (isSent || isPrinted) ? '#bbf7d0' : '#eef1f5')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(isSent || isPrinted, hasPdf && isReceived, 2)}<div style={{ fontSize: 13.5, fontWeight: 700, color: (isSent || isPrinted) ? '#15803d' : hasPdf && isReceived ? '#1e3a8a' : '#94a3b8' }}>{(isSent || isPrinted) ? 'Sent to Print' : 'Send to Print'}</div></div>
-                    {isReceived && hasPdf && bigBtn('Send to Print', '#2563eb', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>, () => changeStatus(r, 'SENT_TO_PRINT'), busy)}
-                    {isReceived && !hasPdf && lockNote('Upload PDF first')}
-                    {isSent && undoBtn(() => changeStatus(r, 'RECEIVED'), busy)}
-                    {isPrinted && <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#16a34a', fontWeight: 600 }}>Done ✓</div>}
-                  </div>
-
-                  {arrow(isSent || isPrinted)}
-
-                  <div style={tBox(isPrinted ? '#f0fdf4' : isSent ? '#eff6ff' : '#f8fafc', isPrinted ? '#bbf7d0' : isSent ? '#bfdbfe' : '#eef1f5')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(isPrinted, isSent, 3)}<div style={{ fontSize: 13.5, fontWeight: 700, color: isPrinted ? '#15803d' : isSent ? '#1e3a8a' : '#94a3b8' }}>{isPrinted ? 'Printed' : 'Mark Printed'}</div></div>
-                    {isPrinted ? (
-                      <>
-                        <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: '#9aa6b5' }}>Tracking number</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -4 }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: '#15803d', wordBreak: 'break-all' }}>{r.trackingNumber || '\u2014'}</span>
-                          {r.trackingNumber && (
-                            <button onClick={() => copyText(r.trackingNumber || '', 'Tracking number')} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 7, border: '1px solid #bbf7d0', background: '#fff', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Copy tracking number">{copyIcon}</button>
-                          )}
+                  <button type="button" onClick={() => setOpenId(open ? null : r.requestId)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#64748b', margin: open ? '0 0 12px' : 0, padding: 0, width: '100%' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}><polyline points="9 18 15 12 9 6"/></svg>
+                    {open ? 'Hide learner details' : 'Show learner details & copy fields'}
+                  </button>
+                  {open && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 11 }}>
+                      <div style={copyableStyle}><div><div style={blLabel}>First Name</div><div style={bvVal}>{first || '—'}</div></div><button style={copyBtnStyle} onClick={() => copyText(first, 'First name')} aria-label="Copy first name">{copyIcon}</button></div>
+                      <div style={copyableStyle}><div><div style={blLabel}>Last Name</div><div style={bvVal}>{last || '—'}</div></div><button style={copyBtnStyle} onClick={() => copyText(last, 'Last name')} aria-label="Copy last name">{copyIcon}</button></div>
+                      <div style={copyableStyle}><div><div style={blLabel}>Phone</div><div style={bvVal}>{r.contactNumber}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.contactNumber, 'Phone')} aria-label="Copy phone">{copyIcon}</button></div>
+                      <div style={copyableStyle}><div><div style={blLabel}>Email</div><div style={bvVal}>{r.email}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.email, 'Email')} aria-label="Copy email">{copyIcon}</button></div>
+                      <div style={copyableStyle}><div><div style={blLabel}>Course</div><div style={bvVal}>{r.course}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.course, 'Course')} aria-label="Copy course">{copyIcon}</button></div>
+                      <div style={copyableStyle}><div><div style={blLabel}>Units</div><div style={bvVal}>{r.units}</div></div><button style={copyBtnStyle} onClick={() => copyText(r.units, 'Units')} aria-label="Copy units">{copyIcon}</button></div>
+                      <div style={{ gridColumn: '1 / -1', background: '#f9fafb', border: '1px solid #ecedf1', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 34, height: 34, borderRadius: 9, background: '#eff4ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                          </div>
+                          <div><div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#94a3b8' }}>Postcode</div><div style={{ fontSize: 17, fontWeight: 700, color: '#111827', letterSpacing: '.02em' }}>{postcode || '—'}</div></div>
                         </div>
-                        {undoBtn(() => changeStatus(r, 'SENT_TO_PRINT'), busy)}
-                      </>
-                    ) : isSent ? (
-                      <>
-                        {bigBtn('Mark Printed', '#2563eb', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><polyline points="20 6 9 17 4 12"/></svg>, () => openPrintDialog(r), busy)}
-                        {undoBtn(() => changeStatus(r, 'RECEIVED'), busy)}
-                      </>
-                    ) : lockNote('Tracking number')}
-                  </div>
+                        <button onClick={() => copyText(postcode, 'Postcode')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,0.08)' }}>{copyIcon}Copy postcode</button>
+                      </div>
+                      <div style={{ gridColumn: '1 / -1', background: '#f8fafc', border: '1px solid #eef1f5', borderRadius: 11, padding: '11px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><div style={blLabel}>Full Delivery Address</div><button style={copyBtnStyle} onClick={() => copyText(addrLines.join(String.fromCharCode(10)), 'Address')} aria-label="Copy address">{copyIcon}</button></div>
+                        <div style={{ fontSize: 14, color: '#1f2937', fontWeight: 600, lineHeight: 1.55 }}>
+                          {addrLines.length ? addrLines.map((l, i) => <div key={i}>{l}</div>) : <span style={{ color: '#94a3b8' }}>No address</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Status panel */}
+                <div style={{ background: '#fff', border: '1px solid #e7eaef', borderRadius: 12, padding: 16, marginBottom: 0 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#475569', margin: '0 0 12px' }}>Status — complete the steps in order</p>
+                  <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                    {/* Step 1 — Upload PDFs (3 slots) */}
+                    <div style={tBox(hasPdf ? '#f0fdf4' : '#eff6ff', hasPdf ? '#bbf7d0' : '#bfdbfe')}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        {stepCircle(hasPdf, !hasPdf, 1)}
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: hasPdf ? '#15803d' : '#1e3a8a' }}>Upload PDFs</div>
+                      </div>
+                      <BookSlot r={r} slot={1} hasPdf={r.hasFile} originalName={r.originalName} fileSize={r.fileSize} bookName={r.bookName1} busy={busy} />
+                      <BookSlot r={r} slot={2} hasPdf={r.hasFile2} originalName={r.originalName2} fileSize={r.fileSize2} bookName={r.bookName2} busy={busy} />
+                      <BookSlot r={r} slot={3} hasPdf={r.hasFile3} originalName={r.originalName3} fileSize={r.fileSize3} bookName={r.bookName3} busy={busy} />
+                    </div>
+
+                    {arrow(hasPdf)}
+
+                    {/* Step 2 — Send to Print */}
+                    <div style={tBox((isSent || isPrinted) ? '#f0fdf4' : '#f8fafc', (isSent || isPrinted) ? '#bbf7d0' : '#eef1f5')}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(isSent || isPrinted, hasPdf && isReceived, 2)}<div style={{ fontSize: 13.5, fontWeight: 700, color: (isSent || isPrinted) ? '#15803d' : hasPdf && isReceived ? '#1e3a8a' : '#94a3b8' }}>{(isSent || isPrinted) ? 'Sent to Print' : 'Send to Print'}</div></div>
+                      {isReceived && hasPdf && bigBtn('Send to Print', '#2563eb', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>, () => changeStatus(r, 'SENT_TO_PRINT'), busy)}
+                      {isReceived && !hasPdf && lockNote('Upload PDF first')}
+                      {isSent && undoBtn(() => changeStatus(r, 'RECEIVED'), busy)}
+                      {isPrinted && <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#16a34a', fontWeight: 600 }}>Done ✓</div>}
+                    </div>
+
+                    {arrow(isSent || isPrinted)}
+
+                    {/* Step 3 — Mark Printed */}
+                    <div style={tBox(isPrinted ? '#f0fdf4' : isSent ? '#eff6ff' : '#f8fafc', isPrinted ? '#bbf7d0' : isSent ? '#bfdbfe' : '#eef1f5')}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{stepCircle(isPrinted, isSent, 3)}<div style={{ fontSize: 13.5, fontWeight: 700, color: isPrinted ? '#15803d' : isSent ? '#1e3a8a' : '#94a3b8' }}>{isPrinted ? 'Printed' : 'Mark Printed'}</div></div>
+                      {isPrinted ? (
+                        <>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: '#9aa6b5' }}>Tracking number</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#15803d', wordBreak: 'break-all' }}>{r.trackingNumber || '\u2014'}</span>
+                            {r.trackingNumber && (
+                              <button onClick={() => copyText(r.trackingNumber || '', 'Tracking number')} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 7, border: '1px solid #bbf7d0', background: '#fff', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Copy tracking number">{copyIcon}</button>
+                            )}
+                          </div>
+                          {undoBtn(() => changeStatus(r, 'SENT_TO_PRINT'), busy)}
+                        </>
+                      ) : isSent ? (
+                        <>
+                          {bigBtn('Mark Printed', '#2563eb', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><polyline points="20 6 9 17 4 12"/></svg>, () => openPrintDialog(r), busy)}
+                          {undoBtn(() => changeStatus(r, 'RECEIVED'), busy)}
+                        </>
+                      ) : lockNote('Tracking number')}
+                    </div>
+                  </div>
                 </div>
               </div>
             );
@@ -552,7 +593,9 @@ export default function RequestsPageInner() {
                   <div><dt>Units Required</dt><dd>{detail.units}</dd></div>
                   <div className="detail-wide"><dt>Delivery Address</dt><dd>{detail.address}</dd></div>
                   <div><dt>Tracking Number</dt><dd>{detail.trackingNumber ? <span className="detail-tracking">{detail.trackingNumber}</span> : <span className="detail-muted">Not yet sent to print</span>}</dd></div>
-                  <div><dt>Attached PDF</dt><dd>{detail.hasFile ? <span>{detail.originalName} <span className="detail-muted">({formatSize(detail.fileSize)})</span></span> : <span className="detail-muted">No PDF attached</span>}</dd></div>
+                  <div><dt>Textbook 1</dt><dd>{detail.bookName1 || <span className="detail-muted">—</span>} {detail.hasFile ? <span className="detail-muted">({detail.originalName})</span> : <span className="detail-muted">No PDF</span>}</dd></div>
+                  <div><dt>Textbook 2</dt><dd>{detail.bookName2 || <span className="detail-muted">—</span>} {detail.hasFile2 ? <span className="detail-muted">({detail.originalName2})</span> : <span className="detail-muted">No PDF</span>}</dd></div>
+                  <div><dt>Textbook 3</dt><dd>{detail.bookName3 || <span className="detail-muted">—</span>} {detail.hasFile3 ? <span className="detail-muted">({detail.originalName3})</span> : <span className="detail-muted">No PDF</span>}</dd></div>
                 </dl>
                 <h3 className="detail-section-title">Activity timeline</h3>
                 <ul className="timeline">

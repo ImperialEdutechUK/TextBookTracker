@@ -1,14 +1,10 @@
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
-// Single manager/admin account. There are no roles — one login does everything
-// (enter the request, send to print with the tracking number, mark it printed).
 model User {
   id           BigInt   @id @default(autoincrement())
   username     String   @unique
@@ -16,20 +12,13 @@ model User {
   fullName     String   @default("Administrator") @map("full_name")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
   @@map("users")
 }
-
-// Request lifecycle: RECEIVED -> SENT_TO_PRINT -> PRINTED. Each request can move
-// one step forward or one step back (revert).
 enum RequestStatus {
   RECEIVED
   SENT_TO_PRINT
   PRINTED
 }
-
-// Time-stamped audit entries for a request, used to build the activity timeline
-// (request created, PDF attached, sent to print, printed, reverted).
 enum RequestEventType {
   CREATED
   PDF_ATTACHED
@@ -38,10 +27,6 @@ enum RequestEventType {
   PRINTED
   REVERTED
 }
-
-// A learner's textbook request. The learner's details are entered directly from
-// their request email, so they are stored inline on the request rather than as a
-// separate user/textbook record.
 model TextbookRequest {
   id             BigInt        @id @default(autoincrement()) @map("request_id")
   fullName       String        @map("full_name")
@@ -55,13 +40,29 @@ model TextbookRequest {
   status         RequestStatus @default(RECEIVED)
   trackingNumber String?       @map("tracking_number")
 
-  // Attached PDF (the printed textbook). Bytes live in the DB so they survive
-  // redeploys on hosts with an ephemeral filesystem.
+  // Slot 1 (original)
+  bookName1    String? @map("book_name_1")
   fileName     String? @map("file_name")
   originalName String? @map("original_name")
   fileSize     BigInt? @map("file_size")
   mimeType     String? @map("mime_type")
   fileData     Bytes?  @map("file_data")
+
+  // Slot 2
+  bookName2     String? @map("book_name_2")
+  fileName2     String? @map("file_name_2")
+  originalName2 String? @map("original_name_2")
+  fileSize2     BigInt? @map("file_size_2")
+  mimeType2     String? @map("mime_type_2")
+  fileData2     Bytes?  @map("file_data_2")
+
+  // Slot 3
+  bookName3     String? @map("book_name_3")
+  fileName3     String? @map("file_name_3")
+  originalName3 String? @map("original_name_3")
+  fileSize3     BigInt? @map("file_size_3")
+  mimeType3     String? @map("mime_type_3")
+  fileData3     Bytes?  @map("file_data_3")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -72,16 +73,13 @@ model TextbookRequest {
   @@index([status])
   @@map("textbook_requests")
 }
-
 model RequestEvent {
   id        BigInt           @id @default(autoincrement()) @map("event_id")
   requestId BigInt           @map("request_id")
   type      RequestEventType
   detail    String?
   createdAt DateTime         @default(now()) @map("created_at")
-
   request TextbookRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-
   @@index([requestId])
   @@map("request_events")
 }
