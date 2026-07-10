@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { ErrorRequestHandler } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import { dbIdleMiddleware } from './lib/db';
 import authRoutes from './routes/auth';
 import textbookRequestRoutes from './routes/textbookRequests';
 import dashboardRoutes from './routes/dashboard';
@@ -26,6 +27,7 @@ app.set('trust proxy', 1);
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(dbIdleMiddleware);
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -39,6 +41,7 @@ app.use(
       }
     },
     credentials: true,
+    exposedHeaders: ['X-Session-Token'],
   })
 );
 

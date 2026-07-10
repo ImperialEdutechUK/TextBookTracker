@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { getAuthCookieName, verifySessionToken, SessionPayload } from '../lib/auth';
+import { getAuthCookieName, verifySessionToken, createSessionToken, SessionPayload } from '../lib/auth';
 
 // Augment Express Request so route handlers can read the authenticated session.
 declare global {
@@ -49,5 +49,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
   req.session = session;
+  // Sliding session: re-issue a fresh token on every authenticated request.
+  // The frontend reads this header and replaces its stored token, so only 15
+  // idle minutes logs someone out. Destructure to drop iat/exp - re-signing a
+  // payload that still has exp throws in jsonwebtoken.
+  const { userId, username, fullName } = session;
+  res.setHeader('X-Session-Token', createSessionToken({ userId, username, fullName }));
   next();
 }

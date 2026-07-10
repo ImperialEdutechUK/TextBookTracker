@@ -28,9 +28,15 @@ export function clearToken() {
 
 // Wrapper around fetch that authenticates the request to the backend, via both
 // the auth cookie and an Authorization header when a token is stored.
-export function apiFetch(path: string, init: RequestInit = {}) {
+export async function apiFetch(path: string, init: RequestInit = {}) {
   const token = getToken();
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(apiUrl(path), { credentials: 'include', ...init, headers });
+  const res = await fetch(apiUrl(path), { credentials: 'include', ...init, headers });
+  // Sliding session: the backend re-issues a fresh 15-minute token on every
+  // authenticated request via this header. Store it so active users stay
+  // logged in; only 15 idle minutes logs someone out.
+  const refreshed = res.headers.get('X-Session-Token');
+  if (refreshed) setToken(refreshed);
+  return res;
 }
