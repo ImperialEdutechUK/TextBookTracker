@@ -115,7 +115,7 @@ const arrow = (on: boolean) => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
   </div>
 );
-const tBox = (bg: string, border: string): React.CSSProperties => ({ flex: 1, borderRadius: 14, padding: '15px 15px 17px', display: 'flex', flexDirection: 'column', gap: 11, border: `1.5px solid ${border}`, background: bg });
+const tBox = (bg: string, border: string): React.CSSProperties => ({ flex: 1, minWidth: 190, borderRadius: 14, padding: '15px 15px 17px', display: 'flex', flexDirection: 'column', gap: 11, border: `1.5px solid ${border}`, background: bg });
 
 export default function RequestsPageInner() {
   const router = useRouter();
@@ -461,9 +461,9 @@ export default function RequestsPageInner() {
                 {/* Status panel */}
                 <div style={{ background: '#fff', border: '1px solid #e7eaef', borderRadius: 12, padding: 16, marginBottom: 0 }}>
                   <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#475569', margin: '0 0 12px' }}>Status — complete the steps in order</p>
-                  <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                  <div style={{ display: 'flex', alignItems: 'stretch', flexWrap: 'wrap', gap: 4 }}>
                     {/* Step 1 — Upload PDFs (3 slots) */}
-                    <div style={tBox(hasPdf ? '#f0fdf4' : '#eff6ff', hasPdf ? '#bbf7d0' : '#bfdbfe')}>
+                    <div style={{ ...tBox(hasPdf ? '#f0fdf4' : '#eff6ff', hasPdf ? '#bbf7d0' : '#bfdbfe'), flex: 2.2 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                         {stepCircle(hasPdf, !hasPdf, 1)}
                         <div style={{ fontSize: 13.5, fontWeight: 700, color: hasPdf ? '#15803d' : '#1e3a8a' }}>Upload PDFs</div>
@@ -493,7 +493,7 @@ export default function RequestsPageInner() {
                         <>
                           <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: '#9aa6b5' }}>Tracking number</div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -4 }}>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: '#15803d', wordBreak: 'break-all' }}>{r.trackingNumber || '\u2014'}</span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#15803d', overflowWrap: 'anywhere', minWidth: 0, flex: 1 }}>{r.trackingNumber || '\u2014'}</span>
                             {r.trackingNumber && (
                               <button onClick={() => copyText(r.trackingNumber || '', 'Tracking number')} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 7, border: '1px solid #bbf7d0', background: '#fff', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Copy tracking number">{copyIcon}</button>
                             )}
